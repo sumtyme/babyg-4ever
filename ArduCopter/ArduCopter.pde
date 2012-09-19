@@ -73,6 +73,7 @@
 #include <AP_Baro.h>
 #include <AP_Compass.h>     // ArduPilot Mega Magnetometer Library
 #include <AP_Math.h>        // ArduPilot Mega Vector/Matrix math Library
+#include <AP_Curve.h>       // Curve used to linearlise throttle pwm to thrust
 #include <AP_InertialSensor.h> // ArduPilot Mega Inertial Sensor (accel & gyro) Library
 #include <AP_IMU.h>         // ArduPilot Mega IMU Library
 #include <AP_PeriodicProcess.h>         // Parent header of Timer
@@ -905,9 +906,6 @@ static uint8_t auto_disarming_counter;
 // prevents duplicate GPS messages from entering system
 static uint32_t last_gps_time;
 
-// Tracks if GPS is enabled based on statup routine
-// If we do not detect GPS at startup, we stop trying and assume GPS is not connected
-static bool GPS_enabled     = false;
 // Set true if we have new PWM data to act on from the Radio
 static bool new_radio_frame;
 // Used to auto exit the in-flight leveler
@@ -1485,15 +1483,10 @@ static void update_GPS(void)
     // A counter that is used to grab at least 10 reads before commiting the Home location
     static byte ground_start_count  = 10;
 
-    // return immediately if GPS is not enabled
-    if( !GPS_enabled ) {
-        return;
-    }
-
     g_gps->update();
     update_GPS_light();
 
-    if(gps_watchdog < 30) {
+    if (gps_watchdog < 30) {
         gps_watchdog++;
     }else{
         // after 12 reads we guess we may have lost GPS signal, stop navigating

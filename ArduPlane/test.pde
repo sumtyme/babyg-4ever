@@ -136,10 +136,10 @@ test_passthru(uint8_t argc, const Menu::arg *argv)
 
         // New radio frame? (we could use also if((millis()- timer) > 20)
         if (APM_RC.GetState() == 1) {
-            Serial.print("CH:");
+            Serial.print_P(PSTR("CH:"));
             for(int16_t i = 0; i < 8; i++) {
                 Serial.print(APM_RC.InputCh(i));        // Print channel values
-                Serial.print(",");
+                print_comma();
                 APM_RC.OutputCh(i, APM_RC.InputCh(i)); // Copy input to Servos
             }
             Serial.println();
@@ -223,13 +223,13 @@ test_failsafe(uint8_t argc, const Menu::arg *argv)
 
         if(oldSwitchPosition != readSwitch()) {
             Serial.printf_P(PSTR("CONTROL MODE CHANGED: "));
-            Serial.println(flight_mode_strings[readSwitch()]);
+            print_flight_mode(readSwitch());
             fail_test++;
         }
 
         if(g.throttle_fs_enabled && g.channel_throttle.get_failsafe()) {
             Serial.printf_P(PSTR("THROTTLE FAILSAFE ACTIVATED: %d, "), (int)g.channel_throttle.radio_in);
-            Serial.println(flight_mode_strings[readSwitch()]);
+            print_flight_mode(readSwitch());
             fail_test++;
         }
 

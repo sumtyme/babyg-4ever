@@ -1,6 +1,6 @@
 /// -*- tab-width: 4; Mode: C++; c-basic-offset: 4; indent-tabs-mode: nil -*-
 
-#define THISFIRMWARE "ArduPlane V2.62"
+#define THISFIRMWARE "ArduPlane V2.63"
 /*
  *  Authors:    Doug Weibel, Jose Julio, Jordi Munoz, Jason Short, Andrew Tridgell, Randy Mackay, Pat Hickey, John Arne Birkeland, Olivier Adler, Amilcar Lucas, Gregory Fletcher
  *  Thanks to:  Chris Anderson, Michael Oborne, Paul Mather, Bill Premerlani, James Cohen, JB from rotorFX, Automatik, Fefenin, Peter Meister, Remzibi, Yury Smirnov, Sandro Benigno, Max Levine, Roberto Navoni, Lorenz Meier, Yury MonZon
@@ -298,33 +298,12 @@ AP_Relay relay;
 static bool usb_connected;
 #endif
 
-static const char *comma = ",";
-
-static const char* flight_mode_strings[] = {
-    "Manual",
-    "Circle",
-    "Stabilize",
-    "",
-    "",
-    "FBW_A",
-    "FBW_B",
-    "",
-    "",
-    "",
-    "Auto",
-    "RTL",
-    "Loiter",
-    "Takeoff",
-    "Land"
-};
-
-
 /* Radio values
  *               Channel assignments
- *                       1   Ailerons (rudder if no ailerons)
+ *                       1   Ailerons
  *                       2   Elevator
  *                       3   Throttle
- *                       4   Rudder (if we have ailerons)
+ *                       4   Rudder
  *                       5   Aux5
  *                       6   Aux6
  *                       7   Aux7
@@ -565,24 +544,34 @@ int32_t wp_distance;
 // Distance between previous and next waypoint.  Meters
 static int32_t wp_totalDistance;
 
-////////////////////////////////////////////////////////////////////////////////
-// repeating event control
-////////////////////////////////////////////////////////////////////////////////
-// Flag indicating current event type
-static byte event_id;
+// event control state
+enum event_type { 
+    EVENT_TYPE_RELAY=0,
+    EVENT_TYPE_SERVO=1
+};
 
-// when the event was started in ms
-static int32_t event_timer_ms;
+static struct {
+    enum event_type type;
 
-// how long to delay the next firing of event in millis
-static uint16_t event_delay_ms;
+	// when the event was started in ms
+    uint32_t start_time_ms;
 
-// how many times to cycle : -1 (or -2) = forever, 2 = do one cycle, 4 = do two cycles
-static int16_t event_repeat = 0;
-// per command value, such as PWM for servos
-static int16_t event_value;
-// the value used to cycle events (alternate value to event_value)
-static int16_t event_undo_value;
+	// how long to delay the next firing of event in millis
+    uint16_t delay_ms;
+
+	// how many times to cycle : -1 (or -2) = forever, 2 = do one cycle, 4 = do two cycles
+    int16_t repeat;
+
+    // RC channel for servos
+    uint8_t rc_channel;
+
+	// PWM for servos
+	uint16_t servo_value;
+
+	// the value used to cycle events (alternate value to event_value)
+    uint16_t undo_value;
+} event_state;
+
 
 ////////////////////////////////////////////////////////////////////////////////
 // Conditional command

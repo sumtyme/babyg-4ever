@@ -193,7 +193,6 @@ static void init_ardupilot()
 	g_gps = &g_gps_driver;
     // GPS Initialization
     g_gps->init(GPS::GPS_ENGINE_AIRBORNE_4G);
-    g_gps->callback = mavlink_delay;
 
     //mavlink_system.sysid = MAV_SYSTEM_ID;				// Using g.sysid_this_mav
     mavlink_system.compid = 1;          //MAV_COMP_ID_IMU;   // We do not check for comp id
@@ -568,3 +567,43 @@ static void reboot_apm(void)
     while (1);
 }
 #endif
+
+
+static void
+print_flight_mode(uint8_t mode)
+{
+    switch (mode) {
+    case MANUAL:
+        Serial.println_P(PSTR("Manual"));
+        break;
+    case CIRCLE:
+        Serial.println_P(PSTR("Circle"));
+        break;
+    case STABILIZE:
+        Serial.println_P(PSTR("Stabilize"));
+        break;
+    case FLY_BY_WIRE_A:
+        Serial.println_P(PSTR("FBW_A"));
+        break;
+    case FLY_BY_WIRE_B:
+        Serial.println_P(PSTR("FBW_B"));
+        break;
+    case AUTO:
+        Serial.println_P(PSTR("AUTO"));
+        break;
+    case RTL:
+        Serial.println_P(PSTR("RTL"));
+        break;
+    case LOITER:
+        Serial.println_P(PSTR("Loiter"));
+        break;
+    default:
+        Serial.println_P(PSTR("---"));
+        break;
+    }
+}
+
+static void print_comma(void)
+{
+    Serial.print_P(PSTR(","));
+}

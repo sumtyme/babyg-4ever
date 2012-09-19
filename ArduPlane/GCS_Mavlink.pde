@@ -1106,7 +1106,13 @@ void GCS_MAVLINK::handleMessage(mavlink_message_t* msg)
             break;
 
         case MAV_CMD_DO_SET_SERVO:
+            APM_RC.enable_out(packet.param1 - 1);
             APM_RC.OutputCh(packet.param1 - 1, packet.param2);
+            result = MAV_RESULT_ACCEPTED;
+            break;
+
+        case MAV_CMD_DO_REPEAT_SERVO:
+            do_repeat_servo(packet.param1, packet.param2, packet.param3, packet.param4);
             result = MAV_RESULT_ACCEPTED;
             break;
 
@@ -1407,7 +1413,7 @@ void GCS_MAVLINK::handleMessage(mavlink_message_t* msg)
         if (mavlink_check_target(packet.target_system,packet.target_component)) break;
 
         // start waypoint receiving
-        if (packet.start_index >= g.command_total ||
+        if (packet.start_index > g.command_total ||
             packet.end_index > g.command_total ||
             packet.end_index < packet.start_index) {
             send_text(SEVERITY_LOW,PSTR("flight plan update rejected"));
