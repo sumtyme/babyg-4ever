@@ -1,4 +1,4 @@
- 
+
  // -*- tab-width: 4; Mode: C++; c-basic-offset: 4; indent-tabs-mode: nil -*-
 
 // This file is just a placeholder for your configuration file.  If you wish to change any of the setup parameters from
@@ -10,7 +10,7 @@
 
 #define CONFIG_APM_HARDWARE APM_HARDWARE_APM2
 
-#define LITE  ENABLED    // if LITE is ENABLED, you may use an APM1280 or APM2560 CPU only (IMU less) with a GPS MT3329
+#define LITE  DISABLED    // if LITE is ENABLED, you may use an APM1280 or APM2560 CPU only (IMU less) with a GPS MT3329
                           // if LITE is DISABLED, this is for a full APM v1 (Oilpan + GPS MT3329 + Magnetometer HMC5883L) or APM v2
 
 #define CLI_ENABLED         ENABLED
@@ -25,12 +25,12 @@
 
 // Radio setup:
 // APM INPUT (Rec = receiver)
-// Rec ch1: Roll 
+// Rec ch1: Roll
 // Rec ch2: Throttle
 // Rec ch3: Pitch
 // Rec ch4: Yaw
 // Rec ch5: not used
-// Rec ch6: 
+// Rec ch6:
 // Rec ch7: Option channel to 2 positions switch
 // Rec ch8: Mode channel to 3 positions switch
 // APM OUTPUT
