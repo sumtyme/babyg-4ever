@@ -340,7 +340,7 @@ static void NOINLINE send_radio_out(mavlink_channel_t chan)
 static void NOINLINE send_vfr_hud(mavlink_channel_t chan)
 {
     float aspeed;
-    if (airspeed.use()) {
+    if (airspeed.enabled()) {
         aspeed = airspeed.get_airspeed();
     } else if (!ahrs.airspeed_estimate(&aspeed)) {
         aspeed = 0;
@@ -1328,16 +1328,20 @@ void GCS_MAVLINK::handleMessage(mavlink_message_t* msg)
         mavlink_param_request_read_t packet;
         mavlink_msg_param_request_read_decode(msg, &packet);
         if (mavlink_check_target(packet.target_system,packet.target_component)) break;
-        if (packet.param_index != -1) {
-            gcs_send_text_P(SEVERITY_LOW, PSTR("Param by index not supported"));
-            break;
-        }
-
         enum ap_var_type p_type;
-        AP_Param *vp = AP_Param::find(packet.param_id, &p_type);
-        if (vp == NULL) {
-            gcs_send_text_fmt(PSTR("Unknown parameter %s"), packet.param_id);
-            break;
+        AP_Param *vp;
+        if (packet.param_index != -1) {
+            vp = AP_Param::find_by_index(packet.param_index, &p_type);
+            if (vp == NULL) {
+                gcs_send_text_fmt(PSTR("Unknown parameter index %d"), packet.param_index);
+                break;
+            }
+        } else {
+            vp = AP_Param::find(packet.param_id, &p_type);
+            if (vp == NULL) {
+                gcs_send_text_fmt(PSTR("Unknown parameter /%s"), packet.param_id);
+                break;
+            }
         }
         char param_name[ONBOARD_PARAM_NAME_LENGTH];
         vp->copy_name(param_name, sizeof(param_name), true);
@@ -1989,31 +1993,47 @@ GCS_MAVLINK::_count_parameters()
 void
 GCS_MAVLINK::queued_param_send()
 {
-    // Check to see if we are sending parameters
-    if (NULL == _queued_parameter) return;
+    if (_queued_parameter == NULL) {
+        return;
+    }
 
-    AP_Param      *vp;
-    float value;
+    uint16_t bytes_allowed;
+    uint8_t count;
+    uint32_t tnow = millis();
 
-    // copy the current parameter and prepare to move to the next
-    vp = _queued_parameter;
+    // use at most 30% of bandwidth on parameters. The constant 26 is
+    // 1/(1000 * 1/8 * 0.001 * 0.3)
+    bytes_allowed = g.serial3_baud * (tnow - _queued_parameter_send_time_ms) * 26;
+    if (bytes_allowed > comm_get_txspace(chan)) {
+        bytes_allowed = comm_get_txspace(chan);
+    }
+    count = bytes_allowed / (MAVLINK_MSG_ID_PARAM_VALUE_LEN + MAVLINK_NUM_NON_PAYLOAD_BYTES);
 
-    // if the parameter can be cast to float, report it here and break out of the loop
-    value = vp->cast_to_float(_queued_parameter_type);
+    while (_queued_parameter != NULL && count--) {
+        AP_Param      *vp;
+        float value;
 
-    char param_name[ONBOARD_PARAM_NAME_LENGTH];
-    vp->copy_name(param_name, sizeof(param_name), true);
+        // copy the current parameter and prepare to move to the next
+        vp = _queued_parameter;
 
-    mavlink_msg_param_value_send(
-        chan,
-        param_name,
-        value,
-        mav_var_type(_queued_parameter_type),
-        _queued_parameter_count,
-        _queued_parameter_index);
+        // if the parameter can be cast to float, report it here and break out of the loop
+        value = vp->cast_to_float(_queued_parameter_type);
 
-    _queued_parameter = AP_Param::next_scalar(&_queued_parameter_token, &_queued_parameter_type);
-    _queued_parameter_index++;
+        char param_name[ONBOARD_PARAM_NAME_LENGTH];
+        vp->copy_name(param_name, sizeof(param_name), true);
+
+        mavlink_msg_param_value_send(
+            chan,
+            param_name,
+            value,
+            mav_var_type(_queued_parameter_type),
+            _queued_parameter_count,
+            _queued_parameter_index);
+
+        _queued_parameter = AP_Param::next_scalar(&_queued_parameter_token, &_queued_parameter_type);
+        _queued_parameter_index++;
+    }
+    _queued_parameter_send_time_ms = tnow;
 }
 
 /**

@@ -76,6 +76,7 @@ public:
         k_param_crosstrack_min_distance,
         k_param_rudder_steer,
         k_param_throttle_nudge,
+        k_param_alt_offset,
 
         // 110: Telemetry control
         //
@@ -299,6 +300,7 @@ public:
     AP_Int16 roll_limit_cd;
     AP_Int16 pitch_limit_max_cd;
     AP_Int16 pitch_limit_min_cd;
+    AP_Int16 alt_offset;
 
     // Misc
     //
@@ -332,7 +334,6 @@ public:
     AP_Float input_voltage;
     AP_Int32 pack_capacity;                     // Battery pack capacity less reserve
     AP_Int8 inverted_flight_ch;             // 0=disabled, 1-8 is channel for inverted flight trigger
-    AP_Int8 sonar_enabled;
     AP_Int8 stick_mixing;
     AP_Int8 rudder_steer;
 

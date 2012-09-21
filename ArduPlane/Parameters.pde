@@ -160,6 +160,15 @@ const AP_Param::Info var_info[] PROGMEM = {
     // @User: Advanced
     GSCALAR(alt_control_algorithm, "ALT_CTRL_ALG",    ALT_CONTROL_DEFAULT),
 
+    // @Param: ALT_OFFSET
+    // @DisplayName: Altitude offset
+    // @Description: This is added to the target altitude in automatic flight. It can be used to add a global altitude offset to a mission, or to adjust for barometric pressure changes
+    // @Units: Meters
+    // @Range: -32767 32767
+    // @Increment: 1
+    // @User: Advanced
+    GSCALAR(alt_offset, "ALT_OFFSET",                 0),
+
     GSCALAR(command_total,          "CMD_TOTAL",      0),
     GSCALAR(command_index,          "CMD_INDEX",      0),
 
@@ -515,13 +524,6 @@ const AP_Param::Info var_info[] PROGMEM = {
     GSCALAR(input_voltage,          "INPUT_VOLTS",    INPUT_VOLTAGE),
     GSCALAR(pack_capacity,          "BATT_CAPACITY",  HIGH_DISCHARGE),
     GSCALAR(inverted_flight_ch,     "INVERTEDFLT_CH", 0),
-
-    // @Param: SONAR_ENABLE
-    // @DisplayName: Enable Sonar
-    // @Description: Setting this to Enabled(1) will enable the sonar. Setting this to Disabled(0) will disable the sonar
-    // @Values: 0:Disabled,1:Enabled
-    // @User: Standard
-    GSCALAR(sonar_enabled,          "SONAR_ENABLE",   SONAR_ENABLED),
 
     // barometer ground calibration. The GND_ prefix is chosen for
     // compatibility with previous releases of ArduPlane

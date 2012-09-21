@@ -264,21 +264,12 @@ GCS_MAVLINK gcs3;
 // PITOT selection
 ////////////////////////////////////////////////////////////////////////////////
 //
-ModeFilterInt16_Size5 sonar_mode_filter(2);
 
 #if CONFIG_PITOT_SOURCE == PITOT_SOURCE_ADC
 AP_AnalogSource_ADC pitot_analog_source( &adc,
                                          CONFIG_PITOT_SOURCE_ADC_CHANNEL, 1.0);
 #elif CONFIG_PITOT_SOURCE == PITOT_SOURCE_ANALOG_PIN
 AP_AnalogSource_Arduino pitot_analog_source(CONFIG_PITOT_SOURCE_ANALOG_PIN, 4.0);
-#endif
-
-#if SONAR_TYPE == MAX_SONAR_XL
-AP_RangeFinder_MaxsonarXL sonar(&pitot_analog_source, &sonar_mode_filter);
-#elif SONAR_TYPE == MAX_SONAR_LV
-// XXX honestly I think these output the same values
-// If someone knows, can they confirm it?
-AP_RangeFinder_MaxsonarXL sonar(&pitot_analog_source, &sonar_mode_filter);
 #endif
 
 #if RECEIVER_RSSI_PIN != -1
@@ -483,9 +474,6 @@ AP_Airspeed airspeed(&pitot_analog_source);
 
 ////////////////////////////////////////////////////////////////////////////////
 // Altitude Sensor variables
-////////////////////////////////////////////////////////////////////////////////
-// Altitude from the sonar sensor.  Meters.  Not yet implemented.
-static int16_t sonar_alt;
 
 ////////////////////////////////////////////////////////////////////////////////
 // flight mode specific
@@ -886,7 +874,6 @@ static void medium_loop()
         // Read altitude from sensors
         // ------------------
         update_alt();
-        if(g.sonar_enabled) sonar_alt = sonar.read();
 
         // altitude smoothing
         // ------------------
@@ -1175,10 +1162,10 @@ static void update_current_flight_mode(void)
             if (g.flybywire_elev_reverse) {
                 elevator_input = -elevator_input;
             }
-            if ((current_loc.alt >= home.alt+g.FBWB_min_altitude_cm) || (g.FBWB_min_altitude_cm == 0)) {
+            if ((adjusted_altitude_cm() >= home.alt+g.FBWB_min_altitude_cm) || (g.FBWB_min_altitude_cm == 0)) {
                 altitude_error_cm = elevator_input * g.pitch_limit_min_cd;
             } else {
-                altitude_error_cm = (home.alt + g.FBWB_min_altitude_cm) - current_loc.alt;
+                altitude_error_cm = (home.alt + g.FBWB_min_altitude_cm) - adjusted_altitude_cm();
                 if (elevator_input < 0) {
                     altitude_error_cm += elevator_input * g.pitch_limit_min_cd;
                 }
