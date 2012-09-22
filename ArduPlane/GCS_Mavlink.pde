@@ -447,18 +447,6 @@ static void NOINLINE send_wind(mavlink_channel_t chan)
         wind.z);
 }
 
-static void NOINLINE send_gps_status(mavlink_channel_t chan)
-{
-    mavlink_msg_gps_status_send(
-        chan,
-        g_gps->num_sats,
-        NULL,
-        NULL,
-        NULL,
-        NULL,
-        NULL);
-}
-
 static void NOINLINE send_current_waypoint(mavlink_channel_t chan)
 {
     mavlink_msg_mission_current_send(
@@ -583,11 +571,6 @@ static bool mavlink_try_send_message(mavlink_channel_t chan, enum ap_message id,
         send_raw_imu3(chan);
         break;
 #endif // HIL_MODE != HIL_MODE_ATTITUDE
-
-    case MSG_GPS_STATUS:
-        CHECK_PAYLOAD_SIZE(GPS_STATUS);
-        send_gps_status(chan);
-        break;
 
     case MSG_CURRENT_WAYPOINT:
         CHECK_PAYLOAD_SIZE(MISSION_CURRENT);
@@ -804,7 +787,7 @@ GCS_MAVLINK::update(void)
     // Update packet drops counter
     packet_drops += status.packet_rx_drop_count;
 
-    if (!waypoint_receiving && !waypoint_sending) {
+    if (!waypoint_receiving) {
         return;
     }
 
@@ -815,11 +798,6 @@ GCS_MAVLINK::update(void)
         tnow > waypoint_timelast_request + 500 + (stream_slowdown*20)) {
         waypoint_timelast_request = tnow;
         send_message(MSG_NEXT_WAYPOINT);
-    }
-
-    // stop waypoint sending if timeout
-    if (waypoint_sending && (millis() - waypoint_timelast_send) > waypoint_send_timeout) {
-        waypoint_sending = false;
     }
 
     // stop waypoint receiving if timeout
@@ -836,8 +814,7 @@ bool GCS_MAVLINK::stream_trigger(enum streams stream_num)
 
     // send at a much lower rate while handling waypoints and
     // parameter sends
-    if (waypoint_receiving || waypoint_sending ||
-        _queued_parameter != NULL) {
+    if (waypoint_receiving || _queued_parameter != NULL) {
         rate *= 0.25;
     }
 
@@ -889,15 +866,6 @@ GCS_MAVLINK::data_stream_send(void)
         send_message(MSG_GPS_RAW);            // TODO - remove this message after location message is working
         send_message(MSG_NAV_CONTROLLER_OUTPUT);
         send_message(MSG_FENCE_STATUS);
-
-        if (last_gps_satellites != g_gps->num_sats) {
-            // this message is mostly a huge waste of bandwidth,
-            // except it is the only message that gives the number
-            // of visible satellites. So only send it when that
-            // changes.
-            send_message(MSG_GPS_STATUS);
-            last_gps_satellites = g_gps->num_sats;
-        }
     }
 
     if (stream_trigger(STREAM_POSITION)) {
@@ -994,9 +962,15 @@ void GCS_MAVLINK::handleMessage(mavlink_message_t* msg)
             break;
 
         case MAV_DATA_STREAM_RAW_SENSORS:
-            streamRateRawSensors = freq;                        // We do not set and save this one so that if HIL is shut down incorrectly
-            // we will not continue to broadcast raw sensor data at 50Hz.
+            if (freq <= 5) {
+                streamRateRawSensors.set_and_save_ifchanged(freq);
+            } else {
+                // We do not set and save this one so that if HIL is shut down incorrectly
+                // we will not continue to broadcast raw sensor data at 50Hz.
+                streamRateRawSensors = freq;
+            }
             break;
+
         case MAV_DATA_STREAM_EXTENDED_STATUS:
             streamRateExtendedStatus.set_and_save_ifchanged(freq);
             break;
@@ -1008,10 +982,6 @@ void GCS_MAVLINK::handleMessage(mavlink_message_t* msg)
         case MAV_DATA_STREAM_RAW_CONTROLLER:
             streamRateRawController.set_and_save_ifchanged(freq);
             break;
-
-        //case MAV_DATA_STREAM_RAW_SENSOR_FUSION:
-        //    streamRateRawSensorFusion.set_and_save(freq);
-        //    break;
 
         case MAV_DATA_STREAM_POSITION:
             streamRatePosition.set_and_save_ifchanged(freq);
@@ -1182,7 +1152,6 @@ void GCS_MAVLINK::handleMessage(mavlink_message_t* msg)
             g.command_total + 1);     // + home
 
         waypoint_timelast_send   = millis();
-        waypoint_sending         = true;
         waypoint_receiving       = false;
         waypoint_dest_sysid      = msg->sysid;
         waypoint_dest_compid     = msg->compid;
@@ -1193,10 +1162,6 @@ void GCS_MAVLINK::handleMessage(mavlink_message_t* msg)
     // XXX read a WP from EEPROM and send it to the GCS
     case MAVLINK_MSG_ID_MISSION_REQUEST:
     {
-        // Check if sending waypiont
-        //if (!waypoint_sending) break;
-        // 5/10/11 - We are trying out relaxing the requirement that we be in waypoint sending mode to respond to a waypoint request.  DEW
-
         // decode
         mavlink_mission_request_t packet;
         mavlink_msg_mission_request_decode(msg, &packet);
@@ -1301,9 +1266,6 @@ void GCS_MAVLINK::handleMessage(mavlink_message_t* msg)
         mavlink_mission_ack_t packet;
         mavlink_msg_mission_ack_decode(msg, &packet);
         if (mavlink_check_target(packet.target_system,packet.target_component)) break;
-
-        // turn off waypoint send
-        waypoint_sending = false;
         break;
     }
 
@@ -1352,7 +1314,8 @@ void GCS_MAVLINK::handleMessage(mavlink_message_t* msg)
             param_name,
             value,
             mav_var_type(p_type),
-            -1, -1);
+            _count_parameters(),
+            packet.param_index);
         break;
     }
 
@@ -1403,7 +1366,6 @@ void GCS_MAVLINK::handleMessage(mavlink_message_t* msg)
         waypoint_timelast_receive = millis();
         waypoint_timelast_request = 0;
         waypoint_receiving   = true;
-        waypoint_sending     = false;
         waypoint_request_i   = 0;
         waypoint_request_last= g.command_total;
         break;
@@ -1427,7 +1389,6 @@ void GCS_MAVLINK::handleMessage(mavlink_message_t* msg)
         waypoint_timelast_receive = millis();
         waypoint_timelast_request = 0;
         waypoint_receiving   = true;
-        waypoint_sending     = false;
         waypoint_request_i   = packet.start_index;
         waypoint_request_last= packet.end_index;
         break;

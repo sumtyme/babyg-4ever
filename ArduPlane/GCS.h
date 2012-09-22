@@ -43,7 +43,6 @@ public:
     void        init(FastSerial *port) {
         _port = port;
         initialised = true;
-        last_gps_satellites = 255;
     }
 
     /// Update GCS state.
@@ -85,9 +84,6 @@ public:
 
     // set to true if this GCS link is active
     bool            initialised;
-
-    // used to prevent wasting bandwidth with GPS_STATUS messages
-    uint8_t         last_gps_satellites;
 
 protected:
     /// The stream we are communicating over
@@ -184,7 +180,6 @@ private:
     uint16_t        waypoint_request_last; // last request index
     uint16_t        waypoint_dest_sysid; // where to send requests
     uint16_t        waypoint_dest_compid; // "
-    bool            waypoint_sending; // currently in send process
     bool            waypoint_receiving; // currently receiving
     uint16_t        waypoint_count;
     uint32_t        waypoint_timelast_send; // milliseconds
