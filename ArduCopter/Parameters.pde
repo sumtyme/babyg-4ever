@@ -98,6 +98,13 @@ const AP_Param::Info var_info[] PROGMEM = {
     // @User: Standard
     GSCALAR(super_simple,   "SUPER_SIMPLE",     SUPER_SIMPLE),
 
+    // @Param: BATT_PIN
+    // @DisplayName: Battery Voltage sending pin
+    // @Description: Setting this to 0 ~ 11 will enable battery voltage sending on pins A0 ~ A11.  Current will be measured on this pin + 1
+    // @Values: 99:Disabled, 0:A0, 1:A1, 10:A10
+    // @User: Standard
+    GSCALAR(battery_pin,    "BATT_PIN",         BATTERY_PIN_1),
+
     // @Param: APPROACH_ALT
     // @DisplayName: RTL Approach Altitude
     // @Description: This is the altitude the vehicle will move to as the final stage of Returning to Launch.  Set to zero to land.
@@ -107,7 +114,21 @@ const AP_Param::Info var_info[] PROGMEM = {
     // @User: Standard
     GSCALAR(rtl_approach_alt,       "APPROACH_ALT", RTL_APPROACH_ALT),
 
-    GSCALAR(tilt_comp,      "TILT",                 54),
+	// @Param: TILT
+    // @DisplayName: Auto Tilt Compensation
+    // @Description: This is a feed-forward compensation which helps the aircraft achieve target waypoint speed.
+    // @Range: 0 100
+    // @Increment: 1
+    // @User: Advanced
+	#if FRAME_CONFIG ==     HELI_FRAME
+	GSCALAR(tilt_comp,      "TILT",                 5),
+	#else
+	GSCALAR(tilt_comp,      "TILT",                 54),
+	#endif
+	
+	
+	
+    
 
     GSCALAR(waypoint_mode,  "WP_MODE",          0),
     GSCALAR(command_total,  "WP_TOTAL",         0),
@@ -372,6 +393,15 @@ static void load_parameters(void)
     if (!ahrs._kp_yaw.load()) {
         ahrs._kp_yaw.set_and_save(0.1);
     }
+
+#if SECONDARY_DMP_ENABLED == ENABLED
+    if (!ahrs2._kp.load()) {
+        ahrs2._kp.set(0.1);
+    }
+    if (!ahrs2._kp_yaw.load()) {
+        ahrs2._kp_yaw.set(0.1);
+    }
+#endif
 
 
     if (!g.format_version.load() ||

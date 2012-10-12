@@ -1,6 +1,6 @@
 /// -*- tab-width: 4; Mode: C++; c-basic-offset: 4; indent-tabs-mode: nil -*-
 
-#define THISFIRMWARE "ArduPlane V2.63"
+#define THISFIRMWARE "ArduPlane V2.65"
 /*
  *  Authors:    Doug Weibel, Jose Julio, Jordi Munoz, Jason Short, Andrew Tridgell, Randy Mackay, Pat Hickey, John Arne Birkeland, Olivier Adler, Amilcar Lucas, Gregory Fletcher
  *  Thanks to:  Chris Anderson, Michael Oborne, Paul Mather, Bill Premerlani, James Cohen, JB from rotorFX, Automatik, Fefenin, Peter Meister, Remzibi, Yury Smirnov, Sandro Benigno, Max Levine, Roberto Navoni, Lorenz Meier, Yury MonZon
@@ -32,6 +32,7 @@
 #include <AP_GPS.h>         // ArduPilot GPS library
 #include <I2C.h>                        // Wayne Truchsess I2C lib
 #include <SPI.h>                        // Arduino SPI lib
+#include <AP_Semaphore.h>   // for removing conflict between optical flow and dataflash on SPI3 bus
 #include <DataFlash.h>      // ArduPilot Mega Flash Memory Library
 #include <AP_ADC.h>         // ArduPilot Mega Analog to Digital Converter Library
 #include <AP_AnalogSource.h> // ArduPilot Mega polymorphic analog getter
@@ -214,7 +215,7 @@ AP_GPS_None     g_gps_driver(NULL);
  #endif // GPS PROTOCOL
 
  # if CONFIG_IMU_TYPE == CONFIG_IMU_MPU6000
-AP_InertialSensor_MPU6000 ins( CONFIG_MPU6000_CHIP_SELECT_PIN );
+AP_InertialSensor_MPU6000 ins;
  # else
 AP_InertialSensor_Oilpan ins( &adc );
  #endif // CONFIG_IMU_TYPE

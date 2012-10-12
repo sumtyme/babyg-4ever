@@ -1,8 +1,8 @@
 /// -*- tab-width: 4; Mode: C++; c-basic-offset: 4; indent-tabs-mode: nil -*-
 
-#define THISFIRMWARE "ArduCopter V2.7.3"
+#define THISFIRMWARE "ArduCopter V2.7.4-Beta"
 /*
- *  ArduCopter Version 2.7.3
+ *  ArduCopter Version 2.7.4
  *  Lead author:	Jason Short
  *  Based on code and ideas from the Arducopter team: Randy Mackay, Pat Hickey, Jose Julio, Jani Hirvinen, Andrew Tridgell, Justin Beech, Adam Rivera, Jean-Louis Naudin, Roberto Navoni
  *  Thanks to:	Chris Anderson, Mike Smith, Jordi Munoz, Doug Weibel, James Goppert, Benjamin Pelletier, Robert Lefebvre, Marco Robustini
@@ -67,6 +67,8 @@
 #include <AP_GPS.h>         // ArduPilot GPS library
 #include <I2C.h>                        // Arduino I2C lib
 #include <SPI.h>                        // Arduino SPI lib
+#include <SPI3.h>               // SPI3 library
+#include <AP_Semaphore.h>   // for removing conflict between optical flow and dataflash on SPI3 bus
 #include <DataFlash.h>      // ArduPilot Mega Flash Memory Library
 #include <AP_ADC.h>         // ArduPilot Mega Analog to Digital Converter Library
 #include <AP_AnalogSource.h>
@@ -170,7 +172,8 @@ APM_RC_APM1 APM_RC;
 // Dataflash
 ////////////////////////////////////////////////////////////////////////////////
 #if CONFIG_APM_HARDWARE == APM_HARDWARE_APM2
-DataFlash_APM2 DataFlash;
+AP_Semaphore spi3_semaphore;
+DataFlash_APM2 DataFlash(&spi3_semaphore);
 #else
 DataFlash_APM1 DataFlash;
 #endif
@@ -224,9 +227,9 @@ AP_Compass_HMC5843 compass;
 
  #ifdef OPTFLOW_ENABLED
   #if CONFIG_APM_HARDWARE == APM_HARDWARE_APM2
-AP_OpticalFlow_ADNS3080_APM2 optflow(OPTFLOW_CS_PIN);
+AP_OpticalFlow_ADNS3080 optflow(&spi3_semaphore,OPTFLOW_CS_PIN);
   #else
-AP_OpticalFlow_ADNS3080 optflow(OPTFLOW_CS_PIN);
+AP_OpticalFlow_ADNS3080 optflow(NULL,OPTFLOW_CS_PIN);
   #endif
  #else
 AP_OpticalFlow optflow;
@@ -259,7 +262,7 @@ AP_GPS_None     g_gps_driver(NULL);
  #endif // GPS PROTOCOL
 
  #if CONFIG_IMU_TYPE == CONFIG_IMU_MPU6000
-AP_InertialSensor_MPU6000 ins( CONFIG_MPU6000_CHIP_SELECT_PIN );
+AP_InertialSensor_MPU6000 ins;
  #else
 AP_InertialSensor_Oilpan ins(&adc);
  #endif
@@ -274,6 +277,11 @@ AP_AHRS_MPU6000  ahrs(&imu, g_gps, &ins);               // only works with APM2
  #else
 AP_AHRS_DCM ahrs(&imu, g_gps);
  #endif
+
+// ahrs2 object is the secondary ahrs to allow running DMP in parallel with DCM
+  #if SECONDARY_DMP_ENABLED == ENABLED && CONFIG_APM_HARDWARE == APM_HARDWARE_APM2
+AP_AHRS_MPU6000  ahrs2(&imu, g_gps, &ins);               // only works with APM2
+  #endif
 
 #elif HIL_MODE == HIL_MODE_SENSORS
 // sensor emulators
@@ -295,9 +303,13 @@ AP_GPS_HIL              g_gps_driver(NULL);
 AP_Compass_HIL compass;                  // never used
 AP_Baro_BMP085_HIL barometer;
 AP_InertialSensor_Stub ins;
- #ifdef OPTFLOW_ENABLED
-AP_OpticalFlow_ADNS3080 optflow(OPTFLOW_CS_PIN);
- #endif
+#ifdef OPTFLOW_ENABLED
+#if CONFIG_APM_HARDWARE == APM_HARDWARE_APM2
+AP_OpticalFlow_ADNS3080 optflow(&spi3_semaphore,OPTFLOW_CS_PIN);
+#else
+AP_OpticalFlow_ADNS3080 optflow(NULL,OPTFLOW_CS_PIN);
+#endif
+#endif
  #ifdef DESKTOP_BUILD
   #include <SITL.h>
 SITL sitl;
@@ -565,6 +577,8 @@ static float cos_roll_x         = 1;
 static float cos_pitch_x        = 1;
 static float cos_yaw_x          = 1;
 static float sin_yaw_y;
+static float sin_roll;
+static float sin_pitch;
 
 ////////////////////////////////////////////////////////////////////////////////
 // SIMPLE Mode
@@ -572,6 +586,19 @@ static float sin_yaw_y;
 // Used to track the orientation of the copter for Simple mode. This value is reset at each arming
 // or in SuperSimple mode when the copter leaves a 20m radius from home.
 static int32_t initial_simple_bearing;
+
+////////////////////////////////////////////////////////////////////////////////
+// Rate contoller targets
+////////////////////////////////////////////////////////////////////////////////
+static int32_t roll_rate_target_ef = 0;
+static int32_t roll_rate_trim_ef = 0;      // normally i term from stabilize controller
+static int32_t pitch_rate_target_ef = 0;
+static int32_t pitch_rate_trim_ef = 0;      // normally i term from stabilize controller
+static int32_t yaw_rate_target_ef = 0;
+static int32_t yaw_rate_trim_ef = 0;      // normally i term from stabilize controller
+static int32_t roll_rate_target_bf = 0;     // body frame roll rate target
+static int32_t pitch_rate_target_bf = 0;    // body frame pitch rate target
+static int32_t yaw_rate_target_bf = 0;      // body frame yaw rate target
 
 ////////////////////////////////////////////////////////////////////////////////
 // ACRO Mode
@@ -893,6 +920,8 @@ static byte medium_loopCounter;
 static byte slow_loopCounter;
 // Counters for branching at 1 hz
 static byte counter_one_herz;
+// Counter of main loop executions.  Used for performance monitoring and failsafe processing
+static uint16_t mainLoop_count;
 // used to track the elapsed time between GPS reads
 static uint32_t nav_loopTimer;
 // Delta Time in milliseconds for navigation computations, updated with every good GPS read
@@ -984,6 +1013,9 @@ void loop()
         G_Dt                            = (float)(timer - fast_loopTimer) / 1000000.f;                  // used by PI Loops
         fast_loopTimer          = timer;
 
+        // for mainloop failure monitoring
+        mainLoop_count++;
+
         // Execute the fast loop
         // ---------------------
         fast_loop();////
@@ -1071,6 +1103,13 @@ static void fast_loop()
     // some space available
     gcs_send_message(MSG_RETRY_DEFERRED);
 
+    // run low level rate controllers that only require IMU data
+    run_rate_controllers();
+
+    // write out the servo PWM values
+    // ------------------------------
+    set_servos_4();
+
     // Read radio
     // ----------
     read_radio();
@@ -1085,14 +1124,21 @@ static void fast_loop()
     calc_inertia();
 #endif
 
+    // optical flow
+    // --------------------
+#ifdef OPTFLOW_ENABLED
+    if(g.optflow_enabled) {
+        update_optical_flow();
+    }
+#endif
+
     // custom code/exceptions for flight modes
     // ---------------------------------------
     update_yaw_mode();
     update_roll_pitch_mode();
 
-    // write out the servo PWM values
-    // ------------------------------
-    set_servos_4();
+    // update targets to rate controllers
+    update_rate_contoller_targets();
 
     // agmatthews - USERHOOKS
 #ifdef USERHOOK_FASTLOOP
@@ -1182,8 +1228,12 @@ static void medium_loop()
         }
 
         if(motors.armed()) {
-            if (g.log_bitmask & MASK_LOG_ATTITUDE_MED)
+            if (g.log_bitmask & MASK_LOG_ATTITUDE_MED) {
                 Log_Write_Attitude();
+#if SECONDARY_DMP_ENABLED == ENABLED
+                Log_Write_DMP();
+#endif
+            }
 
             if (g.log_bitmask & MASK_LOG_MOTORS)
                 Log_Write_Motors();
@@ -1207,12 +1257,6 @@ static void medium_loop()
         // Check for engine arming
         // -----------------------
         arm_motors();
-
-        // Do an extra baro read for Temp sensing
-        // ---------------------------------------
-#if HIL_MODE != HIL_MODE_ATTITUDE
-        barometer.read();
-#endif
 
         // agmatthews - USERHOOKS
 #ifdef USERHOOK_MEDIUMLOOP
@@ -1258,14 +1302,6 @@ static void fifty_hz_loop()
     edf_toy();
 #endif
 
-    // syncronise optical flow reads with altitude reads
-#ifdef OPTFLOW_ENABLED
-    if(g.optflow_enabled) {
-        update_optical_flow();
-    }
-#endif
-
-
 #ifdef USERHOOK_50HZLOOP
     USERHOOK_50HZLOOP
 #endif
@@ -1291,8 +1327,12 @@ static void fifty_hz_loop()
 #endif
 
 # if HIL_MODE == HIL_MODE_DISABLED
-    if (g.log_bitmask & MASK_LOG_ATTITUDE_FAST && motors.armed())
+    if (g.log_bitmask & MASK_LOG_ATTITUDE_FAST && motors.armed()) {
         Log_Write_Attitude();
+#if SECONDARY_DMP_ENABLED == ENABLED
+        Log_Write_DMP();
+#endif
+    }
 
     if (g.log_bitmask & MASK_LOG_RAW && motors.armed())
         Log_Write_Raw();
@@ -1438,42 +1478,27 @@ static void super_slow_loop()
      */
 }
 
-// updated at 10 Hz
+// called at 100hz but data from sensor only arrives at 20 Hz
 #ifdef OPTFLOW_ENABLED
 static void update_optical_flow(void)
 {
+    static uint32_t last_of_update = 0;
     static int log_counter = 0;
 
-    optflow.update();
-    optflow.update_position(ahrs.roll, ahrs.pitch, cos_yaw_x, sin_yaw_y, current_loc.alt);      // updates internal lon and lat with estimation based on optical flow
+    // if new data has arrived, process it
+    if( optflow.last_update != last_of_update ) {
+        last_of_update = optflow.last_update;
+        optflow.update_position(ahrs.roll, ahrs.pitch, cos_yaw_x, sin_yaw_y, current_loc.alt);      // updates internal lon and lat with estimation based on optical flow
 
-    // write to log
-    log_counter++;
-    if( log_counter >= 5 ) {
-        log_counter = 0;
-        if (g.log_bitmask & MASK_LOG_OPTFLOW) {
-            Log_Write_Optflow();
+        // write to log at 5hz
+        log_counter++;
+        if( log_counter >= 4 ) {
+            log_counter = 0;
+            if (g.log_bitmask & MASK_LOG_OPTFLOW) {
+                Log_Write_Optflow();
+            }
         }
     }
-
-    /*if(g.optflow_enabled && current_loc.alt < 500){
-     *       if(GPS_enabled){
-     *               // if we have a GPS, we add some detail to the GPS
-     *               // XXX this may not ne right
-     *               current_loc.lng += optflow.vlon;
-     *               current_loc.lat += optflow.vlat;
-     *
-     *               // some sort of error correction routine
-     *               //current_loc.lng -= ERR_GAIN * (float)(current_loc.lng - x_GPS_speed); // error correction
-     *               //current_loc.lng -= ERR_GAIN * (float)(current_loc.lng - x_GPS_speed); // error correction
-     *       }else{
-     *               // if we do not have a GPS, use relative from 0 for lat and lon
-     *               current_loc.lng = optflow.vlon;
-     *               current_loc.lat = optflow.vlat;
-     *       }
-     *       // OK to run the nav routines
-     *       nav_ok = true;
-     *  }*/
 }
 #endif
 
@@ -1569,7 +1594,7 @@ void update_yaw_mode(void)
 {
     switch(yaw_mode) {
     case YAW_ACRO:
-        g.rc_4.servo_out = get_acro_yaw(g.rc_4.control_in);
+        get_acro_yaw(g.rc_4.control_in);
         return;
         break;
 
@@ -1580,12 +1605,12 @@ void update_yaw_mode(void)
 
     case YAW_HOLD:
         if(g.rc_4.control_in != 0) {
-            g.rc_4.servo_out = get_acro_yaw(g.rc_4.control_in);
+            get_acro_yaw(g.rc_4.control_in);
             yaw_stopped = false;
             yaw_timer = 150;
 
         }else if (!yaw_stopped) {
-            g.rc_4.servo_out = get_acro_yaw(0);
+            get_acro_yaw(0);
             yaw_timer--;
 
             if((yaw_timer == 0) || (fabs(omega.z) < .17)) {
@@ -1598,21 +1623,21 @@ void update_yaw_mode(void)
             if(motors.armed() == false || ((g.rc_3.control_in == 0) && (control_mode <= ACRO) && !failsafe))
                 nav_yaw = ahrs.yaw_sensor;
 
-            g.rc_4.servo_out = get_stabilize_yaw(nav_yaw);
+            get_stabilize_yaw(nav_yaw);
         }
         return;
         break;
 
     case YAW_LOOK_AT_HOME:
         //nav_yaw updated in update_navigation()
-        g.rc_4.servo_out = get_stabilize_yaw(nav_yaw);
+        get_stabilize_yaw(nav_yaw);
         break;
 
     case YAW_AUTO:
         nav_yaw += constrain(wrap_180(auto_yaw - nav_yaw), -60, 60);                 // 40 deg a second
         //Serial.printf("nav_yaw %d ", nav_yaw);
         nav_yaw  = wrap_360(nav_yaw);
-        g.rc_4.servo_out = get_stabilize_yaw(nav_yaw);
+        get_stabilize_yaw(nav_yaw);
         break;
     }
 }
@@ -1639,8 +1664,8 @@ void update_roll_pitch_mode(void)
             pitch_axis = wrap_360(pitch_axis);
 
             // in this mode, nav_roll and nav_pitch = the iterm
-            g.rc_1.servo_out = get_stabilize_roll(roll_axis);
-            g.rc_2.servo_out = get_stabilize_pitch(pitch_axis);
+            get_stabilize_roll(roll_axis);
+            get_stabilize_pitch(pitch_axis);
 
             if (g.rc_3.control_in == 0) {
                 roll_axis = 0;
@@ -1654,12 +1679,12 @@ void update_roll_pitch_mode(void)
                 g.rc_1.servo_out = g.rc_1.control_in;
                 g.rc_2.servo_out = g.rc_2.control_in;
             } else {
-                g.rc_1.servo_out = get_acro_roll(g.rc_1.control_in);
-                g.rc_2.servo_out = get_acro_pitch(g.rc_2.control_in);
+                get_acro_roll(g.rc_1.control_in);
+                get_acro_pitch(g.rc_2.control_in);
             }
 #else
-            g.rc_1.servo_out = get_acro_roll(g.rc_1.control_in);
-            g.rc_2.servo_out = get_acro_pitch(g.rc_2.control_in);
+            get_acro_roll(g.rc_1.control_in);
+            get_acro_pitch(g.rc_2.control_in);
 #endif
         }
         break;
@@ -1674,8 +1699,9 @@ void update_roll_pitch_mode(void)
         control_pitch           = g.rc_2.control_in;
 
         // in this mode, nav_roll and nav_pitch = the iterm
-        g.rc_1.servo_out = get_stabilize_roll(control_roll);
-        g.rc_2.servo_out = get_stabilize_pitch(control_pitch);
+        get_stabilize_roll(control_roll);
+        get_stabilize_pitch(control_pitch);
+
         break;
 
     case ROLL_PITCH_AUTO:
@@ -1690,8 +1716,8 @@ void update_roll_pitch_mode(void)
         control_roll            = g.rc_1.control_mix(nav_roll);
         control_pitch           = g.rc_2.control_mix(nav_pitch);
 
-        g.rc_1.servo_out        = get_stabilize_roll(control_roll);
-        g.rc_2.servo_out        = get_stabilize_pitch(control_pitch);
+        get_stabilize_roll(control_roll);
+        get_stabilize_pitch(control_pitch);
         break;
 
     case ROLL_PITCH_STABLE_OF:
@@ -1704,8 +1730,8 @@ void update_roll_pitch_mode(void)
         control_pitch           = g.rc_2.control_in;
 
         // mix in user control with optical flow
-        g.rc_1.servo_out 		= get_stabilize_roll(get_of_roll(control_roll));
-        g.rc_2.servo_out 		= get_stabilize_pitch(get_of_pitch(control_pitch));
+        get_stabilize_roll(get_of_roll(control_roll));
+        get_stabilize_pitch(get_of_pitch(control_pitch));
         break;
 
     // THOR
@@ -2107,6 +2133,10 @@ static void read_AHRS(void)
 
     ahrs.update();
     omega = imu.get_gyro();
+
+#if SECONDARY_DMP_ENABLED == ENABLED
+    ahrs2.update();
+#endif
 }
 
 static void update_trig(void){
@@ -2127,6 +2157,10 @@ static void update_trig(void){
 
     sin_yaw_y               = yawvector.x;                                              // 1y = north
     cos_yaw_x               = yawvector.y;                                              // 0x = north
+
+    // added to convert earth frame to body frame for rate controllers
+    sin_pitch = -temp.c.x;
+    sin_roll = temp.c.y / cos_pitch_x;
 
     //flat:
     // 0 ° = cos_yaw:  0.00, sin_yaw:  1.00,

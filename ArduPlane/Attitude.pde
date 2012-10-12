@@ -33,6 +33,26 @@ static float get_speed_scaler(void)
     return speed_scaler;
 }
 
+/*
+  return true if the current settings and mode should allow for stick mixing
+ */
+static bool stick_mixing_enabled(void)
+{
+    if (control_mode == CIRCLE || control_mode > FLY_BY_WIRE_B) {
+        // we're in an auto mode. Check the stick mixing flag
+        if (g.stick_mixing &&
+            geofence_stickmixing() &&
+            failsafe == FAILSAFE_NONE) {
+            // we're in an auto mode, and haven't triggered failsafe
+            return true;
+        } else {
+            return false;
+        }
+    }
+    // non-auto mode. Always do stick mixing
+    return true;
+}
+
 
 static void stabilize()
 {
@@ -76,49 +96,39 @@ static void stabilize()
 
     // Mix Stick input to allow users to override control surfaces
     // -----------------------------------------------------------
-    if ((control_mode < FLY_BY_WIRE_A) ||
-        (g.stick_mixing &&
-         geofence_stickmixing() &&
-         control_mode > FLY_BY_WIRE_B &&
-         failsafe == FAILSAFE_NONE)) {
+    if (stick_mixing_enabled()) {
+        if (control_mode < FLY_BY_WIRE_A || control_mode > FLY_BY_WIRE_C) {
+            // do stick mixing on aileron/elevator if not in a fly by
+            // wire mode
+            ch1_inf = (float)g.channel_roll.radio_in - (float)g.channel_roll.radio_trim;
+            ch1_inf = fabs(ch1_inf);
+            ch1_inf = min(ch1_inf, 400.0);
+            ch1_inf = ((400.0 - ch1_inf) /400.0);
 
-        // TODO: use RC_Channel control_mix function?
-        ch1_inf = (float)g.channel_roll.radio_in - (float)g.channel_roll.radio_trim;
-        ch1_inf = fabs(ch1_inf);
-        ch1_inf = min(ch1_inf, 400.0);
-        ch1_inf = ((400.0 - ch1_inf) /400.0);
+            ch2_inf = (float)g.channel_pitch.radio_in - g.channel_pitch.radio_trim;
+            ch2_inf = fabs(ch2_inf);
+            ch2_inf = min(ch2_inf, 400.0);
+            ch2_inf = ((400.0 - ch2_inf) /400.0);
+            
+            // scale the sensor input based on the stick input
+            // -----------------------------------------------
+            g.channel_roll.servo_out *= ch1_inf;
+            g.channel_pitch.servo_out *= ch2_inf;
+            
+            // Mix in stick inputs
+            // -------------------
+            g.channel_roll.servo_out +=     g.channel_roll.pwm_to_angle();
+            g.channel_pitch.servo_out +=    g.channel_pitch.pwm_to_angle();
+        }
 
-        ch2_inf = (float)g.channel_pitch.radio_in - g.channel_pitch.radio_trim;
-        ch2_inf = fabs(ch2_inf);
-        ch2_inf = min(ch2_inf, 400.0);
-        ch2_inf = ((400.0 - ch2_inf) /400.0);
-
-        // scale the sensor input based on the stick input
+        // stick mixing performed for rudder for all cases including FBW
+        // important for steering on the ground during landing
         // -----------------------------------------------
-        g.channel_roll.servo_out *= ch1_inf;
-        g.channel_pitch.servo_out *= ch2_inf;
-
-        // Mix in stick inputs
-        // -------------------
-        g.channel_roll.servo_out +=     g.channel_roll.pwm_to_angle();
-        g.channel_pitch.servo_out +=    g.channel_pitch.pwm_to_angle();
-
-        //Serial.printf_P(PSTR(" servo_out[CH_ROLL] "));
-        //Serial.println(servo_out[CH_ROLL],DEC);
+        ch4_inf = (float)g.channel_rudder.radio_in - (float)g.channel_rudder.radio_trim;
+        ch4_inf = fabs(ch4_inf);
+        ch4_inf = min(ch4_inf, 400.0);
+        ch4_inf = ((400.0 - ch4_inf) /400.0);
     }
-
-    // stick mixing performed for rudder for all cases including FBW unless disabled for higher modes
-    // important for steering on the ground during landing
-    // -----------------------------------------------
-    if (control_mode <= FLY_BY_WIRE_B ||
-        (g.stick_mixing &&
-         geofence_stickmixing() &&
-         failsafe == FAILSAFE_NONE)) {
-		ch4_inf = (float)g.channel_rudder.radio_in - (float)g.channel_rudder.radio_trim;
-		ch4_inf = fabs(ch4_inf);
-		ch4_inf = min(ch4_inf, 400.0);
-		ch4_inf = ((400.0 - ch4_inf) /400.0);
-	}
 
 	// Apply output to Rudder
 	// ----------------------

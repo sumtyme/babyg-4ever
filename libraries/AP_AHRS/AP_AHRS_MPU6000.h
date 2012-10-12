@@ -35,7 +35,7 @@ public:
     }
 
     // initialisation routine to start MPU6000's dmp
-    void init();
+    void init( AP_PeriodicProcess * scheduler = NULL );
 
     // return the smoothed gyro vector corrected for drift
     Vector3f        get_gyro(void) {
@@ -61,6 +61,9 @@ public:
     // status reporting
     float           get_error_rp(void);
     float           get_error_yaw(void);
+
+    // set_as_secondary - avoid running some steps twice (imu updates) if this is a secondary ahrs
+    void            set_as_secondary(bool secondary) { _secondary_ahrs = secondary; }
 
 private:
     float _ki;
@@ -97,6 +100,8 @@ private:
     float _error_yaw_sum;
     uint16_t _error_yaw_count;
     float _error_yaw_last;
+
+    bool _secondary_ahrs;
 };
 
 #endif // AP_AHRS_MPU6000_H

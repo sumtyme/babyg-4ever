@@ -15,6 +15,7 @@
 //#define MAG_ORIENTATION		AP_COMPASS_COMPONENTS_DOWN_PINS_FORWARD
 //#define HIL_MODE				HIL_MODE_ATTITUDE
 //#define DMP_ENABLED ENABLED
+//#define SECONDARY_DMP_ENABLED ENABLED       // allows running DMP in parallel with DCM for testing purposes
 
 //#define FRAME_CONFIG QUAD_FRAME
 /*
@@ -53,7 +54,7 @@
 
 // Inertia based contollers.  disabled by default, work in progress
 //#define ACCEL_ALT_HOLD 0
-//#define INERTIAL_NAV DISABLED
+//#define INERTIAL_NAV ENABLED
 
 
 #if INERTIAL_NAV == ENABLED

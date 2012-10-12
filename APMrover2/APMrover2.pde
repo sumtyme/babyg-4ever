@@ -1,6 +1,6 @@
 /// -*- tab-width: 4; Mode: C++; c-basic-offset: 4; indent-tabs-mode: nil -*-
 
-#define THISFIRMWARE "APMrover v2.20b JL NAUDIN" //New version of the APMrover for the APM v1 or APM v2 and magnetometer + SONAR
+#define THISFIRMWARE "ArduRover v2.20b" //New version of the APMrover for the APM v1 or APM v2 and magnetometer + SONAR
 
 // This is the APMrover firmware derived from the Arduplane v2.32 by Jean-Louis Naudin (JLN) 
 /*
@@ -83,6 +83,7 @@ version 2.1 of the License, or (at your option) any later version.
 #include <AP_GPS.h>         // ArduPilot GPS library
 #include <I2C.h>			// Wayne Truchsess I2C lib
 #include <SPI.h>			// Arduino SPI lib
+#include <AP_Semaphore.h>   // for removing conflict between optical flow and dataflash on SPI3 bus
 #include <DataFlash.h>      // ArduPilot Mega Flash Memory Library
 #include <AP_ADC.h>         // ArduPilot Mega Analog to Digital Converter Library
 #include <AP_AnalogSource.h>// ArduPilot Mega polymorphic analog getter
@@ -157,9 +158,10 @@ Arduino_Mega_ISR_Registry isr_registry;
 // Dataflash
 ////////////////////////////////////////////////////////////////////////////////
 #if CONFIG_APM_HARDWARE == APM_HARDWARE_APM2
-    DataFlash_APM2 DataFlash;
+AP_Semaphore spi3_semaphore;
+DataFlash_APM2 DataFlash(&spi3_semaphore);
 #else
-    DataFlash_APM1   DataFlash;
+DataFlash_APM1 DataFlash;
 #endif
 
 
@@ -248,7 +250,7 @@ AP_GPS_None     g_gps_driver(NULL);
 #endif // GPS PROTOCOL
 
 # if CONFIG_IMU_TYPE == CONFIG_IMU_MPU6000
-  AP_InertialSensor_MPU6000 ins( CONFIG_MPU6000_CHIP_SELECT_PIN );
+  AP_InertialSensor_MPU6000 ins;
 # else
   AP_InertialSensor_Oilpan ins( &adc );
 #endif // CONFIG_IMU_TYPE

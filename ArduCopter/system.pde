@@ -103,6 +103,8 @@ static void init_ardupilot()
 #endif
     SPI.begin();
     SPI.setClockDivider(SPI_CLOCK_DIV16); // 1MHZ SPI rate
+    SPI3.begin();
+    SPI3.setSpeed(SPI3_SPEED_2MHZ);
     //
     // Initialize the isr_registry.
     //
@@ -203,6 +205,12 @@ static void init_ardupilot()
     init_rc_out();              // sets up the timer libs
 
     timer_scheduler.init( &isr_registry );
+
+    /*
+     *  setup the 'main loop is dead' check. Note that this relies on
+     *  the RC library being initialised.
+     */
+    timer_scheduler.set_failsafe(failsafe_check);
 
     // initialise the analog port reader
     AP_AnalogSource_Arduino::init_timer(&timer_scheduler);
@@ -360,10 +368,16 @@ static void startup_ground(void)
  #endif
 
     // initialise ahrs (may push imu calibration into the mpu6000 if using that device).
-    ahrs.init();
+    ahrs.init(&timer_scheduler);
 
     // setup fast AHRS gains to get right attitude
     ahrs.set_fast_gains(true);
+
+#if SECONDARY_DMP_ENABLED == ENABLED
+    ahrs2.init(&timer_scheduler);
+    ahrs2.set_as_secondary(true);
+    ahrs2.set_fast_gains(true);
+#endif
 
     // reset the leds
     // ---------------------------

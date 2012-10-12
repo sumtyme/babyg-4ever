@@ -92,12 +92,6 @@
  # define CONFIG_IMU_TYPE CONFIG_IMU_OILPAN
 #endif
 
-#if CONFIG_IMU_TYPE == CONFIG_IMU_MPU6000
- # ifndef CONFIG_MPU6000_CHIP_SELECT_PIN
-  #  define CONFIG_MPU6000_CHIP_SELECT_PIN 53
- # endif
-#endif
-
 #if CONFIG_IMU_TYPE == CONFIG_IMU_OILPAN
  # define NUM_IMU_SAMPLES_FOR_200HZ 5
  # define NUM_IMU_SAMPLES_FOR_100HZ 10
@@ -146,8 +140,7 @@
  # define USB_MUX_PIN      -1
  # define CLI_SLIDER_ENABLED DISABLED
  # define OPTFLOW_CS_PIN   34
- # define BATTERY_PIN_1      0
- # define CURRENT_PIN_1      1
+ # define BATTERY_PIN_1      0      // Battery voltage on A0, Current on A1
 #elif CONFIG_APM_HARDWARE == APM_HARDWARE_APM2
  # define A_LED_PIN        27
  # define B_LED_PIN        26
@@ -159,8 +152,7 @@
  # define CLI_SLIDER_ENABLED DISABLED
  # define USB_MUX_PIN      23
  # define OPTFLOW_CS_PIN   A3
- # define BATTERY_PIN_1      1
- # define CURRENT_PIN_1      2
+ # define BATTERY_PIN_1      1      // Battery voltage on A1, Current on A2
 #endif
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -673,7 +665,7 @@
  # define STABILIZE_ROLL_P               4.5
 #endif
 #ifndef STABILIZE_ROLL_I
- # define STABILIZE_ROLL_I               0.05
+ # define STABILIZE_ROLL_I               0.0
 #endif
 #ifndef STABILIZE_ROLL_IMAX
  # define STABILIZE_ROLL_IMAX    8.0            // degrees
@@ -683,17 +675,17 @@
  # define STABILIZE_PITCH_P              4.5
 #endif
 #ifndef STABILIZE_PITCH_I
- # define STABILIZE_PITCH_I              0.05
+ # define STABILIZE_PITCH_I              0.0
 #endif
 #ifndef STABILIZE_PITCH_IMAX
  # define STABILIZE_PITCH_IMAX   8.0            // degrees
 #endif
 
 #ifndef  STABILIZE_YAW_P
- # define STABILIZE_YAW_P                7.0            // increase for more aggressive Yaw Hold, decrease if it's bouncy
+ # define STABILIZE_YAW_P                4.5            // increase for more aggressive Yaw Hold, decrease if it's bouncy
 #endif
 #ifndef  STABILIZE_YAW_I
- # define STABILIZE_YAW_I                0.02
+ # define STABILIZE_YAW_I                0.0
 #endif
 #ifndef  STABILIZE_YAW_IMAX
  # define STABILIZE_YAW_IMAX             8.0            // degrees * 100
@@ -707,7 +699,7 @@
  # define RATE_ROLL_P        0.175
 #endif
 #ifndef RATE_ROLL_I
- # define RATE_ROLL_I        0.0
+ # define RATE_ROLL_I        0.010
 #endif
 #ifndef RATE_ROLL_D
  # define RATE_ROLL_D        0.004
@@ -720,7 +712,7 @@
  # define RATE_PITCH_P       0.175
 #endif
 #ifndef RATE_PITCH_I
- # define RATE_PITCH_I           0.0
+ # define RATE_PITCH_I       0.010
 #endif
 #ifndef RATE_PITCH_D
  # define RATE_PITCH_D       0.004
@@ -733,7 +725,7 @@
  # define RATE_YAW_P              .25
 #endif
 #ifndef RATE_YAW_I
- # define RATE_YAW_I              0.02
+ # define RATE_YAW_I              0.015
 #endif
 #ifndef RATE_YAW_D
  # define RATE_YAW_D              0.000
@@ -768,10 +760,10 @@
 // Loiter Navigation control gains
 //
 #ifndef LOITER_RATE_P
- # define LOITER_RATE_P          2.4                    //
+ # define LOITER_RATE_P          5.0            //
 #endif
 #ifndef LOITER_RATE_I
- # define LOITER_RATE_I          0.08           // Wind control
+ # define LOITER_RATE_I          0.04           // Wind control
 #endif
 #ifndef LOITER_RATE_D
  # define LOITER_RATE_D          0.40           // try 2 or 3 for LOITER_RATE 1
@@ -994,10 +986,6 @@
  # define USE_CURRENT_ALT FALSE
 #endif
 
-#ifndef CUT_MOTORS
- # define CUT_MOTORS             1              // do we cut the motors with no throttle?
-#endif
-
 //////////////////////////////////////////////////////////////////////////////
 // RC override
 //
@@ -1065,6 +1053,11 @@
 // experimental mpu6000 DMP code
 #ifndef DMP_ENABLED
  # define DMP_ENABLED DISABLED
+#endif
+
+// experimental mpu6000 DMP code
+#ifndef SECONDARY_DMP_ENABLED
+ # define SECONDARY_DMP_ENABLED DISABLED
 #endif
 
 #ifndef ALTERNATIVE_YAW_MODE
