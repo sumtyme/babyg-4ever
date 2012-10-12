@@ -9,6 +9,7 @@
 #include "opencv2/imgproc/imgproc.hpp"
 
 #include <iostream>
+#include <sys/time.h>
 
 using namespace cv;
 using namespace std;
@@ -46,26 +47,27 @@ int main(int argc, char** argv)
 
  double fps = cap.get(CV_CAP_PROP_FPS);
  cout<<"Frames per second "<<fps<<endl;
- double sleepTimeDbl=1/fps*1000;
- int sleepTime=(int)sleepTimeDbl;
+ double sleepTimeDbl=1000/fps;
  int key;
+ vector<Vec4i> lines;
 
  while (true) {
-	 Mat src;
+	 struct timeval  startTime, endTime;
+	 gettimeofday(&startTime, NULL);
+
+	 double startTimeMillis =
+	          (startTime.tv_sec) * 1000 + (startTime.tv_usec) / 1000 ;
 	 cap>>src;
-//	 imshow("video", src);
 
-////	 cout<<"sleep for: "<<sleepTime<<endl;
-////	 usleep(sleepTime);
-//
-//	 continue;
-
+	 int width=src.cols/2;
+	 int height= src.rows/2;
+	 //pyrDown( src, src, Size( width, height) );
 	 original=src.clone();
 
 	 GaussianBlur( src, src, Size(3,3), 0, 0, BORDER_DEFAULT );
-	 erode(src, src, Mat(), Point (-1,-1), 4);
-	 Canny(src, dst, 50, 200, 3);
-	 cvtColor(dst, cdst, CV_GRAY2BGR);
+	 erode(src, src, Mat(), Point (-1,-1), 5);
+	 Canny(src, dst, 130, 200, 3);
+	 //cvtColor(dst, cdst, CV_GRAY2BGR);
 
 	 #if 0
 	  vector<Vec2f> lines;
@@ -84,7 +86,7 @@ int main(int argc, char** argv)
 		 line( cdst, pt1, pt2, Scalar(0,0,255), 3, CV_AA);
 	  }
 	 #else
-	  vector<Vec4i> lines;
+
 	  HoughLinesP( dst, lines, 1, CV_PI/180, 40, 70, 14 );
 	  for( size_t i = 0; i < lines.size(); i++ )
 	  {
@@ -92,9 +94,31 @@ int main(int argc, char** argv)
 		line( original, Point(l[0], l[1]), Point(l[2], l[3]), Scalar(0,0,255), 3, CV_AA);
 	  }
 	 #endif
+
+
+	 gettimeofday(&endTime, NULL);
+
+	 double endTimeMillis =
+			  (endTime.tv_sec) * 1000 + (endTime.tv_usec) / 1000 ;
+	 double totalTime = endTimeMillis-startTimeMillis;
+
+	 //cout<<"sleepTimeDbl: "<<sleepTimeDbl<< " total time: "<<totalTime<<endl;
+
+	 double calcWait = sleepTimeDbl-totalTime;
+	 if (calcWait<1)
+		 calcWait=1;
+
+	 double calcFPS=1000;
+	 if (totalTime>0)
+		 calcFPS = 1000/totalTime;
+	 ostringstream os;
+	 os<<"FPS: "<<calcFPS<<" loop: "<<totalTime <<" w: "<<width<<" h: "<<height;
+	 String fpsStr = os.str();
+
+	 putText(original, fpsStr, cvPoint(30,30), FONT_HERSHEY_COMPLEX_SMALL, 0.8, cvScalar(250,10,10), 1, CV_AA);
 	 imshow("source", original);
 
-	 key=cvWaitKey(1/fps*1000);
+	 key=cvWaitKey(calcWait);
 
 // waitKey();
  }
