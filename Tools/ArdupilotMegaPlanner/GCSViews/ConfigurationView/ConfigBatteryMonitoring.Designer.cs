@@ -13,6 +13,7 @@
         /// <param name="disposing">true if managed resources should be disposed; otherwise, false.</param>
         protected override void Dispose(bool disposing)
         {
+            startup = true;
             if (disposing && (components != null))
             {
                 components.Dispose();
@@ -50,6 +51,9 @@
             this.CMB_batmontype = new System.Windows.Forms.ComboBox();
             this.pictureBox5 = new System.Windows.Forms.PictureBox();
             this.timer1 = new System.Windows.Forms.Timer(this.components);
+            this.CMB_apmversion = new System.Windows.Forms.ComboBox();
+            this.label1 = new System.Windows.Forms.Label();
+            this.label2 = new System.Windows.Forms.Label();
             this.groupBox4.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)(this.pictureBox5)).BeginInit();
             this.SuspendLayout();
@@ -132,6 +136,7 @@
             // 
             // CMB_batmonsensortype
             // 
+            this.CMB_batmonsensortype.DropDownWidth = 200;
             this.CMB_batmonsensortype.FormattingEnabled = true;
             this.CMB_batmonsensortype.Items.AddRange(new object[] {
             resources.GetString("CMB_batmonsensortype.Items"),
@@ -167,6 +172,7 @@
             // 
             // CMB_batmontype
             // 
+            this.CMB_batmontype.DropDownWidth = 200;
             this.CMB_batmontype.FormattingEnabled = true;
             this.CMB_batmontype.Items.AddRange(new object[] {
             resources.GetString("CMB_batmontype.Items"),
@@ -179,7 +185,7 @@
             // pictureBox5
             // 
             this.pictureBox5.BackColor = System.Drawing.Color.White;
-            this.pictureBox5.BackgroundImage = global::ArdupilotMega.Properties.Resources.attocurrent;
+            this.pictureBox5.BackgroundImage = global::ArdupilotMega.Properties.Resources.BR_APMPWRDEAN_2;
             resources.ApplyResources(this.pictureBox5, "pictureBox5");
             this.pictureBox5.BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle;
             this.pictureBox5.Name = "pictureBox5";
@@ -190,10 +196,35 @@
             this.timer1.Interval = 1000;
             this.timer1.Tick += new System.EventHandler(this.timer1_Tick);
             // 
+            // CMB_apmversion
+            // 
+            this.CMB_apmversion.DropDownWidth = 200;
+            this.CMB_apmversion.FormattingEnabled = true;
+            this.CMB_apmversion.Items.AddRange(new object[] {
+            resources.GetString("CMB_apmversion.Items"),
+            resources.GetString("CMB_apmversion.Items1"),
+            resources.GetString("CMB_apmversion.Items2")});
+            resources.ApplyResources(this.CMB_apmversion, "CMB_apmversion");
+            this.CMB_apmversion.Name = "CMB_apmversion";
+            this.CMB_apmversion.SelectedIndexChanged += new System.EventHandler(this.CMB_apmversion_SelectedIndexChanged);
+            // 
+            // label1
+            // 
+            resources.ApplyResources(this.label1, "label1");
+            this.label1.Name = "label1";
+            // 
+            // label2
+            // 
+            resources.ApplyResources(this.label2, "label2");
+            this.label2.Name = "label2";
+            // 
             // ConfigBatteryMonitoring
             // 
             resources.ApplyResources(this, "$this");
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
+            this.Controls.Add(this.label2);
+            this.Controls.Add(this.label1);
+            this.Controls.Add(this.CMB_apmversion);
             this.Controls.Add(this.groupBox4);
             this.Controls.Add(this.label47);
             this.Controls.Add(this.CMB_batmonsensortype);
@@ -234,5 +265,8 @@
         private System.Windows.Forms.ComboBox CMB_batmontype;
         private System.Windows.Forms.PictureBox pictureBox5;
         private System.Windows.Forms.Timer timer1;
+        private System.Windows.Forms.ComboBox CMB_apmversion;
+        private System.Windows.Forms.Label label1;
+        private System.Windows.Forms.Label label2;
     }
 }

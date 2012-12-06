@@ -28,7 +28,7 @@ const AP_Param::Info var_info[] PROGMEM = {
     GSCALAR(serial3_baud,   "SERIAL3_BAUD",     SERIAL3_BAUD/1000),
 
     // @Param: TELEM_DELAY
-    // @DisplayName: Telemetry startup delay 
+    // @DisplayName: Telemetry startup delay
     // @Description: The amount of time (in seconds) to delay radio telemetry to prevent an Xbee bricking on power up
     // @User: Standard
     // @Units: seconds
@@ -36,14 +36,14 @@ const AP_Param::Info var_info[] PROGMEM = {
     // @Increment: 1
     GSCALAR(telem_delay,            "TELEM_DELAY",     0),
 
-    // @Param: ALT_HOLD_RTL
+    // @Param: ALT_RTL
     // @DisplayName: RTL Altitude
-    // @Description: This is the altitude the model will move to before Returning to Launch.  Set to zero to return at current altitude.
+    // @Description: The minimum altitude the model will move to before Returning to Launch.  Set to zero to return at current altitude.
     // @Units: centimeters
     // @Range: 0 4000
     // @Increment: 1
     // @User: Standard
-    GSCALAR(RTL_altitude,   "ALT_HOLD_RTL",     RTL_HOLD_ALT),
+    GSCALAR(rtl_altitude,   "RTL_ALT",     RTL_ALT),
 
     // @Param: SONAR_ENABLE
     // @DisplayName: Enable Sonar
@@ -53,7 +53,15 @@ const AP_Param::Info var_info[] PROGMEM = {
     GSCALAR(sonar_enabled,  "SONAR_ENABLE",     DISABLED),
 
     GSCALAR(sonar_type,     "SONAR_TYPE",           AP_RANGEFINDER_MAXSONARXL),
+
     GSCALAR(battery_monitoring, "BATT_MONITOR", DISABLED),
+
+    // @Param: BATT_FAILSAFE
+    // @DisplayName: Battery Failsafe Enable
+    // @Description: Controls whether failsafe will be invoked when battery voltage or current runs low
+    // @Values: 0:Disabled,1:Enabled
+    // @User: Standard
+    GSCALAR(battery_fs_enabled, "BATT_FAILSAFE", BATTERY_FAILSAFE),
 
     // @Param: VOLT_DIVIDER
     // @DisplayName: Voltage Divider
@@ -98,21 +106,14 @@ const AP_Param::Info var_info[] PROGMEM = {
     // @User: Standard
     GSCALAR(super_simple,   "SUPER_SIMPLE",     SUPER_SIMPLE),
 
-    // @Param: BATT_PIN
-    // @DisplayName: Battery Voltage sending pin
-    // @Description: Setting this to 0 ~ 11 will enable battery voltage sending on pins A0 ~ A11.  Current will be measured on this pin + 1
-    // @Values: 99:Disabled, 0:A0, 1:A1, 10:A10
-    // @User: Standard
-    GSCALAR(battery_pin,    "BATT_PIN",         BATTERY_PIN_1),
-
-    // @Param: APPROACH_ALT
-    // @DisplayName: RTL Approach Altitude
-    // @Description: This is the altitude the vehicle will move to as the final stage of Returning to Launch.  Set to zero to land.
+    // @Param: RTL_ALT_FINAL
+    // @DisplayName: RTL Final Altitude
+    // @Description: This is the altitude the vehicle will move to as the final stage of Returning to Launch or after completing a mission.  Set to -1 to disable, zero to land.
     // @Units: centimeters
-    // @Range: 0 1000
+    // @Range: -1 1000
     // @Increment: 1
     // @User: Standard
-    GSCALAR(rtl_approach_alt,       "APPROACH_ALT", RTL_APPROACH_ALT),
+    GSCALAR(rtl_alt_final,  "RTL_ALT_FINAL", RTL_ALT_FINAL),
 
 	// @Param: TILT
     // @DisplayName: Auto Tilt Compensation
@@ -120,15 +121,35 @@ const AP_Param::Info var_info[] PROGMEM = {
     // @Range: 0 100
     // @Increment: 1
     // @User: Advanced
-	#if FRAME_CONFIG ==     HELI_FRAME
-	GSCALAR(tilt_comp,      "TILT",                 5),
-	#else
-	GSCALAR(tilt_comp,      "TILT",                 54),
-	#endif
-	
-	
-	
-    
+	GSCALAR(tilt_comp,      "TILT",     TILT_COMPENSATION),
+
+    // @Param: BATT_VOLT_PIN
+    // @DisplayName: Battery Voltage sensing pin
+    // @Description: Setting this to 0 ~ 13 will enable battery current sensing on pins A0 ~ A13.
+    // @Values: -1:Disabled, 0:A0, 1:A1, 13:A13
+    // @User: Standard
+    GSCALAR(battery_volt_pin,    "BATT_VOLT_PIN",    BATTERY_VOLT_PIN),
+
+    // @Param: BATT_CURR_PIN
+    // @DisplayName: Battery Current sensing pin
+    // @Description: Setting this to 0 ~ 13 will enable battery current sensing on pins A0 ~ A13.
+    // @Values: -1:Disabled, 1:A1, 2:A2, 13:A13
+    // @User: Standard
+    GSCALAR(battery_curr_pin,    "BATT_CURR_PIN",    BATTERY_CURR_PIN),
+
+    // @Param: RSSI_PIN
+    // @DisplayName: Receiver RSSI sensing pin
+    // @Description: This selects an analog pin for the receiver RSSI voltage. It assumes the voltage is 5V for max rssi, 0V for minimum
+    // @Values: -1:Disabled, 0:A0, 1:A1, 2:A2, 13:A13
+    // @User: Standard
+    GSCALAR(rssi_pin,            "RSSI_PIN",         -1),
+
+    // @Param: THR_ACC_ENABLE
+    // @DisplayName: Enable Accel based throttle controller
+    // @Description: This allows enabling and disabling the accelerometer based throttle controller.  If disabled a velocity based controller is used.
+    // @Values: 0:Disabled, 1:Enabled
+    // @User: Standard
+    GSCALAR(throttle_accel_enabled,  "THR_ACC_ENABLE",   1),
 
     GSCALAR(waypoint_mode,  "WP_MODE",          0),
     GSCALAR(command_total,  "WP_TOTAL",         0),
@@ -152,15 +173,54 @@ const AP_Param::Info var_info[] PROGMEM = {
     // @Increment: 1
     // @User: Standard
     GSCALAR(loiter_radius,  "WP_LOITER_RAD",    LOITER_RADIUS),
+
+	// @Param: WP_SPEED_MAX
+    // @DisplayName: Waypoint Max Speed Target
+    // @Description: Defines the speed which the aircraft will attempt to maintain during a WP mission.
+    // @Units: Centimeters/Second
+    // @Increment: 100
+    // @User: Standard
     GSCALAR(waypoint_speed_max,     "WP_SPEED_MAX", WAYPOINT_SPEED_MAX),
+
+	// @Param: XTRK_GAIN_SC
+    // @DisplayName: Cross-Track Gain
+    // @Description: This controls the rate that the Auto Controller will attempt to return original track
+    // @Units: Dimensionless
+	// @User: Standard
     GSCALAR(crosstrack_gain,        "XTRK_GAIN_SC", CROSSTRACK_GAIN),
-    GSCALAR(auto_land_timeout,      "AUTO_LAND",    AUTO_LAND_TIME*1000),
+
+    // @Param: XTRK_MIN_DIST
+    // @DisplayName: Crosstrack mininum distance
+    // @Description: Minimum distance in meters between waypoints to do crosstrack correction.
+    // @Units: Meters
+    // @Range: 0 32767
+    // @Increment: 1
+    // @User: Standard
+    GSCALAR(crosstrack_min_distance, "XTRK_MIN_DIST",  CROSSTRACK_MIN_DISTANCE),
+
+    // @Param: RTL_LOITER_TIME
+    // @DisplayName: RTL loiter time
+    // @Description: Time (in milliseconds) to loiter above home before begining final descent
+    // @Units: ms
+    // @Range: 0 60000
+    // @Increment: 1000
+    // @User: Standard
+    GSCALAR(rtl_loiter_time,      "RTL_LOIT_TIME",    RTL_LOITER_TIME),
+
+    // @Param: LAND_SPEED
+    // @DisplayName: Land speed
+    // @Description: The descent speed for the final stage of landing in cm/s
+    // @Units: cm/s
+    // @Range: 10 200
+    // @Increment: 10
+    // @User: Standard
+    GSCALAR(land_speed,             "LAND_SPEED",   LAND_SPEED),
 
     // @Param: THR_MIN
     // @DisplayName: Minimum Throttle
     // @Description: The minimum throttle which the autopilot will apply.
-    // @Units: Percent
-    // @Range: 0 100
+    // @Units: ms
+    // @Range: 0 1000
     // @Increment: 1
     // @User: Standard
     GSCALAR(throttle_min,   "THR_MIN",          MINIMUM_THROTTLE),
@@ -168,8 +228,8 @@ const AP_Param::Info var_info[] PROGMEM = {
     // @Param: THR_MAX
     // @DisplayName: Maximum Throttle
     // @Description: The maximum throttle which the autopilot will apply.
-    // @Units: Percent
-    // @Range: 0 100
+    // @Units: ms
+    // @Range: 0 1000
     // @Increment: 1
     // @User: Standard
     GSCALAR(throttle_max,   "THR_MAX",          MAXIMUM_THROTTLE),
@@ -215,6 +275,14 @@ const AP_Param::Info var_info[] PROGMEM = {
     GSCALAR(radio_tuning_high, "TUNE_HIGH",         1000),
     GSCALAR(frame_orientation, "FRAME",             FRAME_ORIENTATION),
     GSCALAR(ch7_option, "CH7_OPT",                  CH7_OPTION),
+
+	// @Param: AUTO_SLEW
+    // @DisplayName: Auto Slew Rate
+    // @Description: This restricts the rate of change of the attitude allowed by the Auto Controller
+    // @Units: Degrees/Second
+	// @Range: 1 45
+    // @Increment: 1
+    // @User: Advanced
     GSCALAR(auto_slew_rate, "AUTO_SLEW",            AUTO_SLEW_RATE),
 
 #if FRAME_CONFIG ==     HELI_FRAME
@@ -222,6 +290,9 @@ const AP_Param::Info var_info[] PROGMEM = {
     GGROUP(heli_servo_2,    "HS2_", RC_Channel),
     GGROUP(heli_servo_3,    "HS3_", RC_Channel),
     GGROUP(heli_servo_4,    "HS4_", RC_Channel),
+	GSCALAR(heli_pitch_ff, "H_PITCH_FF",            HELI_PITCH_FF),
+	GSCALAR(heli_roll_ff, "H_ROLL_FF",            HELI_ROLL_FF),
+	GSCALAR(heli_yaw_ff, "H_YAW_FF",            HELI_YAW_FF),
 #endif
 
 #if CAMERA == ENABLED
@@ -277,7 +348,7 @@ const AP_Param::Info var_info[] PROGMEM = {
 
     // variable
     //---------
-    GSCALAR(stabilize_d,                    "STAB_D",  STABILIZE_D),
+    //GSCALAR(stabilize_d,                    "STAB_D",  STABILIZE_D),
 
     // @Param: STAB_D_S
     // @DisplayName: Stabilize D Schedule
@@ -285,12 +356,29 @@ const AP_Param::Info var_info[] PROGMEM = {
     // @Range: 0 1
     // @Increment: .01
     // @User: Advanced
-    GSCALAR(stabilize_d_schedule, "STAB_D_S",  STABILIZE_D_SCHEDULE),
+    //GSCALAR(stabilize_d_schedule, "STAB_D_S",  STABILIZE_D_SCHEDULE),
 
-    GSCALAR(acro_p,                         "ACRO_P",      ACRO_P),
-    GSCALAR(axis_lock_p,            "AXIS_P",      AXIS_LOCK_P),
-    GSCALAR(axis_enabled,           "AXIS_ENABLE", AXIS_LOCK_ENABLED),
-    GSCALAR(copter_leds_mode,       "LED_MODE",    9),
+    // Acro parameters
+    GSCALAR(acro_p,                 "ACRO_P",           ACRO_P),
+    GSCALAR(axis_lock_p,            "AXIS_P",           AXIS_LOCK_P),
+    GSCALAR(axis_enabled,           "AXIS_ENABLE",      AXIS_LOCK_ENABLED),
+    // @Param: ACRO_BAL_ROLL
+    // @DisplayName: Acro Balance Roll
+    // @Description: rate at which roll angle returns to level in acro mode
+    // @Range: 0 300
+    // @Increment: 1
+    // @User: Advanced
+    GSCALAR(acro_balance_roll,      "ACRO_BAL_ROLL",    ACRO_BALANCE_ROLL),
+
+    // @Param: ACRO_BAL_PITCH
+    // @DisplayName: Acro Balance Pitch
+    // @Description: rate at which pitch angle returns to level in acro mode
+    // @Range: 0 300
+    // @Increment: 1
+    // @User: Advanced
+    GSCALAR(acro_balance_pitch,     "ACRO_BAL_PITCH",   ACRO_BALANCE_PITCH),
+
+    GSCALAR(copter_leds_mode,       "LED_MODE",         9),
 
     // PID controller
     //---------------
@@ -306,6 +394,8 @@ const AP_Param::Info var_info[] PROGMEM = {
     GGROUP(pid_nav_lon,             "NAV_LON_",  AC_PID),
 
     GGROUP(pid_throttle,      "THR_RATE_", AC_PID),
+    GGROUP(pid_throttle_accel,"THR_ACCEL_", AC_PID),
+
     GGROUP(pid_optflow_roll,  "OF_RLL_",   AC_PID),
     GGROUP(pid_optflow_pitch, "OF_PIT_",   AC_PID),
 
@@ -326,17 +416,19 @@ const AP_Param::Info var_info[] PROGMEM = {
     GOBJECT(compass,        "COMPASS_", Compass),
 
     // @Group: INS_
-    // @Path: ../libraries/AP_InertialSensor/AP_InertialSensor_Oilpan.cpp
-#if HIL_MODE == HIL_MODE_DISABLED && CONFIG_APM_HARDWARE == APM_HARDWARE_APM1
-    GOBJECT(ins,            "INS_", AP_InertialSensor_Oilpan),
+    // @Path: ../libraries/AP_InertialSensor/AP_InertialSensor.cpp
+#if HIL_MODE == HIL_MODE_DISABLED
+    GOBJECT(ins,            "INS_", AP_InertialSensor),
+#endif
+
+#if INERTIAL_NAV_XY == ENABLED || INERTIAL_NAV_Z == ENABLED
+    // @Group: INAV_
+    // @Path: ../libraries/AP_InertialNav/AP_InertialNav.cpp
+    GOBJECT(inertial_nav,           "INAV_",    AP_InertialNav),
 #endif
 
     GOBJECT(gcs0,                   "SR0_",     GCS_MAVLINK),
     GOBJECT(gcs3,                   "SR3_",     GCS_MAVLINK),
-
-    // @Group: IMU_
-    // @Path: ../libraries/AP_IMU/IMU.cpp
-    GOBJECT(imu,                    "IMU_",     IMU),
 
     // @Group: AHRS_
     // @Path: ../libraries/AP_AHRS/AP_AHRS.cpp
@@ -382,7 +474,7 @@ static void load_parameters(void)
     // change the default for the AHRS_GPS_GAIN for ArduCopter
     // if it hasn't been set by the user
     if (!ahrs.gps_gain.load()) {
-        ahrs.gps_gain.set_and_save(0.0);
+        ahrs.gps_gain.set_and_save(1.0);
     }
 
     // setup different AHRS gains for ArduCopter than the default
@@ -408,18 +500,18 @@ static void load_parameters(void)
         g.format_version != Parameters::k_format_version) {
 
         // erase all parameters
-        Serial.printf_P(PSTR("Firmware change: erasing EEPROM...\n"));
+        cliSerial->printf_P(PSTR("Firmware change: erasing EEPROM...\n"));
         AP_Param::erase_all();
 
         // save the current format version
         g.format_version.set_and_save(Parameters::k_format_version);
         default_dead_zones();
-        Serial.println_P(PSTR("done."));
+        cliSerial->println_P(PSTR("done."));
     } else {
         uint32_t before = micros();
         // Load all auto-loaded EEPROM variables
         AP_Param::load_all();
 
-        Serial.printf_P(PSTR("load_all took %luus\n"), micros() - before);
+        cliSerial->printf_P(PSTR("load_all took %luus\n"), micros() - before);
     }
 }

@@ -11,20 +11,18 @@
 static int8_t   process_logs(uint8_t argc, const Menu::arg *argv);      // in Log.pde
 static int8_t   setup_mode(uint8_t argc, const Menu::arg *argv);        // in setup.pde
 static int8_t   test_mode(uint8_t argc, const Menu::arg *argv);         // in test.cpp
-static int8_t   planner_mode(uint8_t argc, const Menu::arg *argv);      // in planner.pde
+static int8_t   reboot_board(uint8_t argc, const Menu::arg *argv);
 
 // This is the help function
 // PSTR is an AVR macro to read strings from flash memory
 // printf_P is a version of print_f that reads from flash memory
 static int8_t   main_menu_help(uint8_t argc, const Menu::arg *argv)
 {
-    Serial.printf_P(PSTR("Commands:\n"
+    cliSerial->printf_P(PSTR("Commands:\n"
                          "  logs\n"
                          "  setup\n"
                          "  test\n"
-                         "  planner\n"
-                         "\n"
-                         "Move the slide switch and reset to FLY.\n"
+                         "  reboot\n"
                          "\n"));
     return(0);
 }
@@ -36,16 +34,26 @@ const struct Menu::command main_menu_commands[] PROGMEM = {
     {"logs",                process_logs},
     {"setup",               setup_mode},
     {"test",                test_mode},
+    {"reboot",              reboot_board},
     {"help",                main_menu_help},
-    {"planner",             planner_mode}
 };
 
 // Create the top-level menu object.
 MENU(main_menu, THISFIRMWARE, main_menu_commands);
 
-// the user wants the CLI. It never exits
-static void run_cli(void)
+static int8_t reboot_board(uint8_t argc, const Menu::arg *argv)
 {
+    reboot_apm();
+    return 0;
+}
+
+// the user wants the CLI. It never exits
+static void run_cli(FastSerial *port)
+{
+    cliSerial = port;
+    Menu::set_port(port);
+    port->set_blocking_writes(true);
+
     while (1) {
         main_menu.run();
     }
@@ -62,8 +70,8 @@ static void init_ardupilot()
     // USB_MUX_PIN
     pinMode(USB_MUX_PIN, INPUT);
 
-    usb_connected = !digitalRead(USB_MUX_PIN);
-    if (!usb_connected) {
+    ap_system.usb_connected = !digitalReadFast(USB_MUX_PIN);
+    if (!ap_system.usb_connected) {
         // USB is not connected, this means UART0 may be a Xbee, with
         // its darned bricking problem. We can't write to it for at
         // least one second after powering up. Simplest solution for
@@ -78,7 +86,7 @@ static void init_ardupilot()
     // The console port buffers are defined to be sufficiently large to support
     // the MAVLink protocol efficiently
     //
-    Serial.begin(SERIAL0_BAUD, 128, 256);
+    cliSerial->begin(SERIAL0_BAUD, 128, 256);
 
     // GPS serial port.
     //
@@ -88,7 +96,7 @@ static void init_ardupilot()
     Serial1.begin(38400, 256, 16);
 #endif
 
-    Serial.printf_P(PSTR("\n\nInit " THISFIRMWARE
+    cliSerial->printf_P(PSTR("\n\nInit " THISFIRMWARE
                          "\n\nFree RAM: %u\n"),
                     memcheck_available_memory());
 
@@ -103,8 +111,12 @@ static void init_ardupilot()
 #endif
     SPI.begin();
     SPI.setClockDivider(SPI_CLOCK_DIV16); // 1MHZ SPI rate
+
+#if CONFIG_APM_HARDWARE == APM_HARDWARE_APM2
     SPI3.begin();
     SPI3.setSpeed(SPI3_SPEED_2MHZ);
+#endif
+
     //
     // Initialize the isr_registry.
     //
@@ -159,10 +171,10 @@ static void init_ardupilot()
     gcs0.init(&Serial);
 
 #if USB_MUX_PIN > 0
-    if (!usb_connected) {
+    if (!ap_system.usb_connected) {
         // we are not connected via USB, re-init UART0 with right
         // baud rate
-        Serial.begin(map_baudrate(g.serial3_baud, SERIAL3_BAUD));
+        cliSerial->begin(map_baudrate(g.serial3_baud, SERIAL3_BAUD));
     }
 #else
     // we have a 2nd serial port for telemetry
@@ -188,12 +200,14 @@ static void init_ardupilot()
     }
 #endif
 
+/*
 #ifdef RADIO_OVERRIDE_DEFAULTS
     {
         int16_t rc_override[8] = RADIO_OVERRIDE_DEFAULTS;
         APM_RC.setHIL(rc_override);
     }
 #endif
+*/
 
 #if FRAME_CONFIG == HELI_FRAME
     motors.servo_manual = false;
@@ -238,6 +252,10 @@ static void init_ardupilot()
         init_optflow();
     }
 
+#if INERTIAL_NAV_XY == ENABLED || INERTIAL_NAV_Z == ENABLED
+    // initialise inertial nav
+    inertial_nav.init();
+#endif
 
 // agmatthews USERHOOKS
 #ifdef USERHOOK_INIT
@@ -253,11 +271,15 @@ static void init_ardupilot()
     //
     if (check_startup_for_CLI()) {
         digitalWrite(A_LED_PIN, LED_ON);                        // turn on setup-mode LED
-        Serial.printf_P(PSTR("\nCLI:\n\n"));
-        run_cli();
+        cliSerial->printf_P(PSTR("\nCLI:\n\n"));
+        run_cli(cliSerial);
     }
 #else
-    Serial.printf_P(PSTR("\nPress ENTER 3 times for CLI\n\n"));
+    const prog_char_t *msg = PSTR("\nPress ENTER 3 times to start interactive setup\n");
+    cliSerial->println_P(msg);
+#if USB_MUX_PIN == 0
+    Serial3.println_P(msg);
+#endif
 #endif // CLI_ENABLED
 
 #if HIL_MODE != HIL_MODE_ATTITUDE
@@ -271,6 +293,11 @@ static void init_ardupilot()
     init_sonar();
 #endif
 
+#if FRAME_CONIG == HELI_FRAME
+// initialise controller filters
+init_rate_controllers();
+#endif // HELI_FRAME
+
     // initialize commands
     // -------------------
     init_commands();
@@ -278,12 +305,6 @@ static void init_ardupilot()
     // set the correct flight mode
     // ---------------------------
     reset_control_switch();
-
-    // init the Z damopener
-    // --------------------
-#if ACCEL_ALT_HOLD != 0
-    init_z_damper();
-#endif
 
 
     startup_ground();
@@ -293,27 +314,8 @@ static void init_ardupilot()
 
 #if LOGGING_ENABLED == ENABLED
     Log_Write_Startup();
-    Log_Write_Data(10, (float)g.pi_stabilize_roll.kP());
-    Log_Write_Data(11, (float)g.pi_stabilize_roll.kI());
-
-    Log_Write_Data(12, (float)g.pid_rate_roll.kP());
-    Log_Write_Data(13, (float)g.pid_rate_roll.kI());
-    Log_Write_Data(14, (float)g.pid_rate_roll.kD());
-    Log_Write_Data(15, (float)g.stabilize_d.get());
-
-    Log_Write_Data(16, (float)g.pi_loiter_lon.kP());
-    Log_Write_Data(17, (float)g.pi_loiter_lon.kI());
-
-    Log_Write_Data(18, (float)g.pid_nav_lon.kP());
-    Log_Write_Data(19, (float)g.pid_nav_lon.kI());
-    Log_Write_Data(20, (float)g.pid_nav_lon.kD());
-
-    Log_Write_Data(21, (int32_t)g.auto_slew_rate.get());
-
-    Log_Write_Data(22, (float)g.pid_loiter_rate_lon.kP());
-    Log_Write_Data(23, (float)g.pid_loiter_rate_lon.kI());
-    Log_Write_Data(24, (float)g.pid_loiter_rate_lon.kD());
 #endif
+
 
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -349,7 +351,7 @@ static void init_ardupilot()
 
 #endif
 
-    SendDebug("\nReady to FLY ");
+    cliSerial->print_P(PSTR("\nReady to FLY "));
 }
 
 
@@ -362,9 +364,11 @@ static void startup_ground(void)
 
     // Warm up and read Gyro offsets
     // -----------------------------
-    imu.init(IMU::COLD_START, mavlink_delay, flash_leds, &timer_scheduler);
+    ins.init(AP_InertialSensor::COLD_START, 
+             ins_sample_rate,
+             mavlink_delay, flash_leds, &timer_scheduler);
  #if CLI_ENABLED == ENABLED
-    report_imu();
+    report_ins();
  #endif
 
     // initialise ahrs (may push imu calibration into the mpu6000 if using that device).
@@ -388,39 +392,18 @@ static void startup_ground(void)
     reset_I_all();
 }
 
-/*
- * #define YAW_HOLD             0
- * #define YAW_ACRO             1
- * #define YAW_AUTO             2
- * #define YAW_LOOK_AT_HOME     3
- *
- * #define ROLL_PITCH_STABLE    0
- * #define ROLL_PITCH_ACRO  1
- * #define ROLL_PITCH_AUTO		2
- *
- * #define THROTTLE_MANUAL  0
- * #define THROTTLE_HOLD        1
- * #define THROTTLE_AUTO		2
- *
- */
-
 static void set_mode(byte mode)
 {
-    // if we don't have GPS lock
-    if(home_is_set == false) {
-        // THOR
-        // We don't care about Home if we don't have lock yet in Toy mode
-        if(mode == TOY_A || mode == TOY_M || mode == OF_LOITER) {
-            // nothing
-        }else if (mode > ALT_HOLD) {
+    // Switch to stabilize mode if requested mode requires a GPS lock
+    if(!ap.home_is_set) {
+        if (mode > ALT_HOLD && mode != TOY_A && mode != TOY_M && mode != OF_LOITER && mode != LAND) {
             mode = STABILIZE;
         }
     }
 
-    // nothing but OF_LOITER for OptFlow only
-    if (g.optflow_enabled && g_gps->status() != GPS::GPS_OK) {
-        if (mode > ALT_HOLD && mode != OF_LOITER)
-            mode = STABILIZE;
+    // Switch to stabilize if OF_LOITER requested but no optical flow sensor
+    if (mode == OF_LOITER && !g.optflow_enabled ) {
+        mode = STABILIZE;
     }
 
     control_mode            = mode;
@@ -429,26 +412,15 @@ static void set_mode(byte mode)
     // used to stop fly_aways
     // set to false if we have low throttle
     motors.auto_armed(g.rc_3.control_in > 0);
-
-    // clearing value used in interactive alt hold
-    reset_throttle_counter = 0;
-
-    // clearing value used to force the copter down in landing mode
-    landing_boost = 0;
-
-    // do we want to come to a stop or pass a WP?
-    slow_wp = false;
-
-    // do not auto_land if we are leaving RTL
-    loiter_timer = 0;
+    set_auto_armed(g.rc_3.control_in > 0);
 
     // if we change modes, we must clear landed flag
-    land_complete   = false;
+    set_land_complete(false);
 
-    // have we acheived the proper altitude before RTL is enabled
-    rtl_reached_alt = false;
     // debug to Serial terminal
-    //Serial.println(flight_mode_strings[control_mode]);
+    //cliSerial->println(flight_mode_strings[control_mode]);
+
+    ap.loiter_override  = false;
 
     // report the GPS and Motor arming status
     led_mode = NORMAL_LEDS;
@@ -456,85 +428,114 @@ static void set_mode(byte mode)
     switch(control_mode)
     {
     case ACRO:
-        yaw_mode                = YAW_HOLD;
+    	ap.manual_throttle = true;
+    	ap.manual_attitude = true;
+        yaw_mode        = YAW_ACRO;
         roll_pitch_mode = ROLL_PITCH_ACRO;
-        throttle_mode   = THROTTLE_MANUAL;
+        set_throttle_mode(THROTTLE_MANUAL);
+        // reset acro axis targets to current attitude
+		if(g.axis_enabled){
+            roll_axis 	= ahrs.roll_sensor;
+            pitch_axis 	= ahrs.pitch_sensor;
+            nav_yaw 	= ahrs.yaw_sensor;
+        }
         break;
 
     case STABILIZE:
-        yaw_mode                = YAW_HOLD;
+    	ap.manual_throttle = true;
+    	ap.manual_attitude = true;
+        yaw_mode        = YAW_HOLD;
         roll_pitch_mode = ROLL_PITCH_STABLE;
-        throttle_mode   = THROTTLE_MANUAL;
+        set_throttle_mode(THROTTLE_MANUAL_TILT_COMPENSATED);
         break;
 
     case ALT_HOLD:
-        yaw_mode                = ALT_HOLD_YAW;
+    	ap.manual_throttle = false;
+    	ap.manual_attitude = true;
+        yaw_mode        = ALT_HOLD_YAW;
         roll_pitch_mode = ALT_HOLD_RP;
-        throttle_mode   = ALT_HOLD_THR;
-
+        set_throttle_mode(ALT_HOLD_THR);
         force_new_altitude(max(current_loc.alt, 100));
         break;
 
     case AUTO:
-        yaw_mode                = AUTO_YAW;
+    	ap.manual_throttle = false;
+    	ap.manual_attitude = false;
+        yaw_mode        = AUTO_YAW;
         roll_pitch_mode = AUTO_RP;
-        throttle_mode   = AUTO_THR;
+        set_throttle_mode(AUTO_THR);
 
         // loads the commands from where we left off
         init_commands();
         break;
 
     case CIRCLE:
-        yaw_mode                = CIRCLE_YAW;
+    	ap.manual_throttle = false;
+    	ap.manual_attitude = false;
+        yaw_mode        = CIRCLE_YAW;
         roll_pitch_mode = CIRCLE_RP;
-        throttle_mode   = CIRCLE_THR;
+        set_throttle_mode(CIRCLE_THR);
         set_next_WP(&current_loc);
-        circle_WP               = next_WP;
+        circle_WP       = next_WP;
         circle_angle    = 0;
         break;
 
     case LOITER:
-        yaw_mode                = LOITER_YAW;
+    	ap.manual_throttle = false;
+    	ap.manual_attitude = false;
+        yaw_mode        = LOITER_YAW;
         roll_pitch_mode = LOITER_RP;
-        throttle_mode   = LOITER_THR;
+        set_throttle_mode(LOITER_THR);
         set_next_WP(&current_loc);
         break;
 
     case POSITION:
-        yaw_mode                = YAW_HOLD;
+    	ap.manual_throttle = true;
+    	ap.manual_attitude = false;
+        yaw_mode        = YAW_HOLD;
         roll_pitch_mode = ROLL_PITCH_AUTO;
-        throttle_mode   = THROTTLE_MANUAL;
+        set_throttle_mode(THROTTLE_MANUAL);
         set_next_WP(&current_loc);
         break;
 
     case GUIDED:
-        yaw_mode                = YAW_AUTO;
+    	ap.manual_throttle = false;
+    	ap.manual_attitude = false;
+        yaw_mode        = YAW_AUTO;
         roll_pitch_mode = ROLL_PITCH_AUTO;
-        throttle_mode   = THROTTLE_AUTO;
-        next_WP                 = current_loc;
+        set_throttle_mode(THROTTLE_AUTO);
+        next_WP         = current_loc;
         set_next_WP(&guided_WP);
         break;
 
     case LAND:
-        yaw_mode                = LOITER_YAW;
-        roll_pitch_mode = LOITER_RP;
-        throttle_mode   = THROTTLE_AUTO;
+        if( ap.home_is_set ) {
+            // switch to loiter if we have gps
+            ap.manual_attitude = false;
+            yaw_mode        = LOITER_YAW;
+            roll_pitch_mode = LOITER_RP;
+        }else{
+            // otherwise remain with stabilize roll and pitch
+            ap.manual_attitude = true;
+            yaw_mode        = YAW_HOLD;
+            roll_pitch_mode = ROLL_PITCH_STABLE;
+        }
+    	ap.manual_throttle = false;
         do_land();
         break;
 
     case RTL:
-        yaw_mode                = RTL_YAW;
-        roll_pitch_mode = RTL_RP;
-        throttle_mode   = RTL_THR;
-        rtl_reached_alt = false;
-        set_next_WP(&current_loc);
-        set_new_altitude(get_RTL_alt());
+    	ap.manual_throttle = false;
+    	ap.manual_attitude = false;
+        do_RTL();
         break;
 
     case OF_LOITER:
-        yaw_mode                = OF_LOITER_YAW;
+    	ap.manual_throttle = false;
+    	ap.manual_attitude = false;
+        yaw_mode        = OF_LOITER_YAW;
         roll_pitch_mode = OF_LOITER_RP;
-        throttle_mode   = OF_LOITER_THR;
+        set_throttle_mode(OF_LOITER_THR);
         set_next_WP(&current_loc);
         break;
 
@@ -542,96 +543,65 @@ static void set_mode(byte mode)
     // These are the flight modes for Toy mode
     // See the defines for the enumerated values
     case TOY_A:
-        yaw_mode                = YAW_TOY;
+    	ap.manual_throttle = false;
+    	ap.manual_attitude = true;
+        yaw_mode        = YAW_TOY;
         roll_pitch_mode = ROLL_PITCH_TOY;
-        throttle_mode   = THROTTLE_AUTO;
-        wp_control              = NO_NAV_MODE;
+        set_throttle_mode(THROTTLE_AUTO);
+        wp_control      = NO_NAV_MODE;
 
         // save throttle for fast exit of Alt hold
         saved_toy_throttle = g.rc_3.control_in;
 
-        // hold the current altitude
-        set_new_altitude(current_loc.alt);
         break;
 
     case TOY_M:
-        yaw_mode                = YAW_TOY;
-        roll_pitch_mode = ROLL_PITCH_TOY;
-        wp_control              = NO_NAV_MODE;
-        throttle_mode   = THROTTLE_MANUAL;
+    	ap.manual_throttle = false;
+    	ap.manual_attitude = true;
+        yaw_mode            = YAW_TOY;
+        roll_pitch_mode 	= ROLL_PITCH_TOY;
+        wp_control          = NO_NAV_MODE;
+        set_throttle_mode(THROTTLE_HOLD);
         break;
 
     default:
         break;
     }
 
-    if(failsafe) {
+    if(ap.failsafe) {
         // this is to allow us to fly home without interactive throttle control
-        throttle_mode = THROTTLE_AUTO;
+        set_throttle_mode(THROTTLE_AUTO);
+    	ap.manual_throttle = false;
+
         // does not wait for us to be in high throttle, since the
         // Receiver will be outputting low throttle
         motors.auto_armed(true);
+    	set_auto_armed(true);
     }
 
-    if(roll_pitch_mode <= ROLL_PITCH_ACRO) {
+    if(ap.manual_attitude) {
         // We are under manual attitude control
         // remove the navigation from roll and pitch command
         reset_nav_params();
         // remove the wind compenstaion
         reset_wind_I();
-        // Clears the alt hold compensation
-        reset_throttle_I();
     }
 
     Log_Write_Mode(control_mode);
-}
-
-static void set_failsafe(boolean mode)
-{
-    // only act on changes
-    // -------------------
-    if(failsafe != mode) {
-
-        // store the value so we don't trip the gate twice
-        // -----------------------------------------------
-        failsafe = mode;
-
-        if (failsafe == false) {
-            // We've regained radio contact
-            // ----------------------------
-            failsafe_off_event();
-
-        }else{
-            // We've lost radio contact
-            // ------------------------
-            failsafe_on_event();
-        }
-    }
 }
 
 static void
 init_simple_bearing()
 {
     initial_simple_bearing = ahrs.yaw_sensor;
-}
-
-static void update_throttle_cruise(int16_t tmp)
-{
-    if(tmp != 0) {
-        g.throttle_cruise += tmp;
-        reset_throttle_I();
-    }
-
-    // recalc kp
-    //g.pid_throttle.kP((float)g.throttle_cruise.get() / 981.0);
-    //Serial.printf("kp:%1.4f\n",kp);
+    Log_Write_Data(DATA_INIT_SIMPLE_BEARING, initial_simple_bearing);
 }
 
 #if CLI_SLIDER_ENABLED == ENABLED && CLI_ENABLED == ENABLED
 static boolean
 check_startup_for_CLI()
 {
-    return (digitalRead(SLIDE_SWITCH_PIN) == 0);
+    return (digitalReadFast(SLIDE_SWITCH_PIN) == 0);
 }
 #endif // CLI_ENABLED
 
@@ -651,24 +621,24 @@ static uint32_t map_baudrate(int8_t rate, uint32_t default_baud)
     case 111:  return 111100;
     case 115:  return 115200;
     }
-    //Serial.println_P(PSTR("Invalid SERIAL3_BAUD"));
+    //cliSerial->println_P(PSTR("Invalid SERIAL3_BAUD"));
     return default_baud;
 }
 
 #if USB_MUX_PIN > 0
 static void check_usb_mux(void)
 {
-    bool usb_check = !digitalRead(USB_MUX_PIN);
-    if (usb_check == usb_connected) {
+    bool usb_check = !digitalReadFast(USB_MUX_PIN);
+    if (usb_check == ap_system.usb_connected) {
         return;
     }
 
     // the user has switched to/from the telemetry port
-    usb_connected = usb_check;
-    if (usb_connected) {
-        Serial.begin(SERIAL0_BAUD);
+    ap_system.usb_connected = usb_check;
+    if (ap_system.usb_connected) {
+        cliSerial->begin(SERIAL0_BAUD);
     } else {
-        Serial.begin(map_baudrate(g.serial3_baud, SERIAL3_BAUD));
+        cliSerial->begin(map_baudrate(g.serial3_baud, SERIAL3_BAUD));
     }
 }
 #endif
@@ -693,3 +663,77 @@ uint16_t board_voltage(void)
     return vcc.read_vcc();
 }
 #endif
+
+/*
+  force a software reset of the APM
+ */
+static void reboot_apm(void)
+{
+    cliSerial->printf_P(PSTR("REBOOTING\n"));
+    delay(100); // let serial flush
+    // see http://www.arduino.cc/cgi-bin/yabb2/YaBB.pl?num=1250663814/
+    // for the method
+#if CONFIG_APM_HARDWARE == APM_HARDWARE_APM2
+    // this relies on the bootloader resetting the watchdog, which
+    // APM1 doesn't do
+    cli();
+    wdt_enable(WDTO_15MS);
+#else
+    // this works on APM1
+    void (*fn)(void) = NULL;
+    fn();
+#endif
+    while (1);
+}
+
+//
+// print_flight_mode - prints flight mode to serial port.
+//
+static void
+print_flight_mode(uint8_t mode)
+{
+    switch (mode) {
+    case STABILIZE:
+        cliSerial->print_P(PSTR("STABILIZE"));
+        break;
+    case ACRO:
+        cliSerial->print_P(PSTR("ACRO"));
+        break;
+    case ALT_HOLD:
+        cliSerial->print_P(PSTR("ALT_HOLD"));
+        break;
+    case AUTO:
+        cliSerial->print_P(PSTR("AUTO"));
+        break;
+    case GUIDED:
+        cliSerial->print_P(PSTR("GUIDED"));
+        break;
+    case LOITER:
+        cliSerial->print_P(PSTR("LOITER"));
+        break;
+    case RTL:
+        cliSerial->print_P(PSTR("RTL"));
+        break;
+    case CIRCLE:
+        cliSerial->print_P(PSTR("CIRCLE"));
+        break;
+    case POSITION:
+        cliSerial->print_P(PSTR("POSITION"));
+        break;
+    case LAND:
+        cliSerial->print_P(PSTR("LAND"));
+        break;
+    case OF_LOITER:
+        cliSerial->print_P(PSTR("OF_LOITER"));
+        break;
+    case TOY_M:
+        cliSerial->print_P(PSTR("TOY_M"));
+        break;
+    case TOY_A:
+        cliSerial->print_P(PSTR("TOY_A"));
+        break;
+    default:
+        cliSerial->print_P(PSTR("---"));
+        break;
+    }
+}

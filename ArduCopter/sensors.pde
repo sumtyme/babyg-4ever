@@ -39,7 +39,7 @@ static void init_compass()
     compass.set_orientation(MAG_ORIENTATION);                                                   // set compass's orientation on aircraft
     if (!compass.init() || !compass.read()) {
         // make sure we don't pass a broken compass to DCM
-        Serial.println_P(PSTR("COMPASS INIT ERROR"));
+        cliSerial->println_P(PSTR("COMPASS INIT ERROR"));
         return;
     }
     ahrs.set_compass(&compass);
@@ -50,10 +50,10 @@ static void init_compass()
 
 static void init_optflow()
 {
-#ifdef OPTFLOW_ENABLED
-    if( optflow.init(false, &timer_scheduler) == false ) {
+#if OPTFLOW == ENABLED
+    if( optflow.init(false, &timer_scheduler, &spi_semaphore, &spi3_semaphore) == false ) {
         g.optflow_enabled = false;
-        SendDebug("\nFailed to Init OptFlow ");
+        cliSerial->print_P(PSTR("\nFailed to Init OptFlow "));
     }
     // suspend timer while we set-up SPI communication
     timer_scheduler.suspend_timer();
@@ -65,11 +65,15 @@ static void init_optflow()
 
     // resume timer
     timer_scheduler.resume_timer();
-#endif
+#endif      // OPTFLOW == ENABLED
 }
 
+// read_battery - check battery voltage and current and invoke failsafe if necessary
+// called at 10hz
+#define BATTERY_FS_COUNTER  100     // 100 iterations at 10hz is 10 seconds
 static void read_battery(void)
 {
+    static uint8_t low_battery_counter = 0;
 
     if(g.battery_monitoring == 0) {
         battery_voltage1 = 0;
@@ -77,37 +81,35 @@ static void read_battery(void)
     }
 
     if(g.battery_monitoring == 3 || g.battery_monitoring == 4) {
-        static AP_AnalogSource_Arduino bat_pin(g.battery_pin);
-        battery_voltage1 = BATTERY_VOLTAGE(bat_pin.read_average());
+        static AP_AnalogSource_Arduino batt_volt_pin(g.battery_volt_pin);
+        batt_volt_pin.set_pin(g.battery_volt_pin);
+        battery_voltage1 = BATTERY_VOLTAGE(batt_volt_pin.read_average());
     }
     if(g.battery_monitoring == 4) {
-        static AP_AnalogSource_Arduino current_pin(g.battery_pin+1);    // current is always read from one pin higher than battery voltage
-        current_amps1    = CURRENT_AMPS(current_pin.read_average());
+        static AP_AnalogSource_Arduino batt_curr_pin(g.battery_curr_pin);
+        batt_curr_pin.set_pin(g.battery_curr_pin);
+        current_amps1    = CURRENT_AMPS(batt_curr_pin.read_average());
         current_total1   += current_amps1 * 0.02778;            // called at 100ms on average, .0002778 is 1/3600 (conversion to hours)
     }
 
-#if BATTERY_EVENT == ENABLED
-    //if(battery_voltage < g.low_voltage)
-    //	low_battery_event();
-
-    if((battery_voltage1 < g.low_voltage) || (g.battery_monitoring == 4 && current_total1 > g.pack_capacity)) {
-        low_battery_event();
-
- #if COPTER_LEDS == ENABLED
-        if ( bitRead(g.copter_leds_mode, 3) ) {         // Only Activate if a battery is connected to avoid alarm on USB only
-            if (battery_voltage1 > 1) {
-                piezo_on();
-            }else{
-                piezo_off();
-            }
+    // check for low voltage or current if the low voltage check hasn't already been triggered
+    if (!ap.low_battery && ( battery_voltage1 < g.low_voltage || (g.battery_monitoring == 4 && current_total1 > g.pack_capacity))) {
+        low_battery_counter++;
+        if( low_battery_counter >= BATTERY_FS_COUNTER ) {
+            low_battery_counter = BATTERY_FS_COUNTER;   // ensure counter does not overflow
+            low_battery_event();
         }
-
-
-    }else if ( bitRead(g.copter_leds_mode, 3) ) {
-        piezo_off();
- #endif                // COPTER_LEDS
+    }else{
+        // reset low_battery_counter in case it was a temporary voltage dip
+        low_battery_counter = 0;
     }
-#endif         //BATTERY_EVENT
 }
 
-//v: 10.9453, a: 17.4023, mah: 8.2
+// read the receiver RSSI as an 8 bit number for MAVLink
+// RC_CHANNELS_SCALED message
+void read_receiver_rssi(void)
+{
+    RSSI_pin.set_pin(g.rssi_pin);
+    float ret = RSSI_pin.read();
+    receiver_rssi = constrain(ret, 0, 255);
+}

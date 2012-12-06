@@ -63,7 +63,7 @@ namespace ArdupilotMega
         /// </summary>
         public static bool MONO = false;
         /// <summary>
-        /// speech engein enable
+        /// speech engine enable
         /// </summary>
         public static bool speechEnable = false;
         /// <summary>
@@ -75,7 +75,7 @@ namespace ArdupilotMega
         /// </summary>
         public static Joystick joystick = null;
         /// <summary>
-        /// track last joystick packet sent. used to track timming
+        /// track last joystick packet sent. used to control rate
         /// </summary>
         DateTime lastjoystick = DateTime.Now;
         /// <summary>
@@ -91,7 +91,7 @@ namespace ArdupilotMega
         /// </summary>
         bool serialThread = false;
         /// <summary>
-        /// used for mini https server for websockets/mjpeg video stream, and network link kmls
+        /// used for mini http server for websockets/mjpeg video stream, and network link kmls
         /// </summary>
         private TcpListener listener;
         /// <summary>
@@ -122,7 +122,8 @@ namespace ArdupilotMega
         {
             ArduPlane,
             ArduCopter2,
-            ArduRover
+            ArduRover,
+            Ateryx
         }
 
         DateTime connectButtonUpdate = DateTime.Now;
@@ -145,13 +146,13 @@ namespace ArdupilotMega
         /// Otiginally seperate controls, each hosted in a toolstip sqaure, combined into this custom
         /// control for layout reasons.
         /// </summary>
-        private readonly ConnectionControl _connectionControl;
+        static internal ConnectionControl _connectionControl;
 
         public MainV2()
         {
             log.Info("Mainv2 ctor");
 
-            Form splash = new Splash();
+            Form splash = Program.Splash;
             splash.Show();
 
             string strVersion = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version.ToString();
@@ -248,6 +249,8 @@ namespace ArdupilotMega
                 }
             }
 
+            ChangeUnits();
+
             try
             {
                 FlightData = new GCSViews.FlightData();
@@ -260,20 +263,19 @@ namespace ArdupilotMega
                 // preload
                 Python.CreateEngine();
             }
-                catch (ArgumentException e) {
-                    //http://www.microsoft.com/en-us/download/details.aspx?id=16083
-                    //System.ArgumentException: Font 'Arial' does not support style 'Regular'.
+            catch (ArgumentException e)
+            {
+                //http://www.microsoft.com/en-us/download/details.aspx?id=16083
+                //System.ArgumentException: Font 'Arial' does not support style 'Regular'.
 
-                    log.Fatal(e);
-                    CustomMessageBox.Show(e.ToString() + "\n\n Please install this http://www.microsoft.com/en-us/download/details.aspx?id=16083");
-                    this.Close();
-                }
+                log.Fatal(e);
+                CustomMessageBox.Show(e.ToString() + "\n\n Please install this http://www.microsoft.com/en-us/download/details.aspx?id=16083");
+                this.Close();
+            }
             catch (Exception e) { log.Fatal(e); CustomMessageBox.Show("A Major error has occured : " + e.ToString()); this.Close(); }
 
             if (MainV2.config["CHK_GDIPlus"] != null)
                 GCSViews.FlightData.myhud.UseOpenGL = !bool.Parse(MainV2.config["CHK_GDIPlus"].ToString());
-
-            ChangeUnits();
 
             try
             {
@@ -388,14 +390,14 @@ namespace ArdupilotMega
             {
                 // If the form has been closed, or never shown before, we need all new stuff
                 this.connectionStatsForm = new Form
-                                               {
-                                                   Width = 430,
-                                                   Height = 180,
-                                                   MaximizeBox = false,
-                                                   MinimizeBox = false,
-                                                   FormBorderStyle = FormBorderStyle.FixedDialog,
-                                                   Text = "Link Stats"
-                                               };
+                {
+                    Width = 430,
+                    Height = 180,
+                    MaximizeBox = false,
+                    MinimizeBox = false,
+                    FormBorderStyle = FormBorderStyle.FixedDialog,
+                    Text = "Link Stats"
+                };
                 // Change the connection stats control, so that when/if the connection stats form is showing,
                 // there will be something to see
                 this.connectionStatsForm.Controls.Clear();
@@ -544,7 +546,7 @@ namespace ArdupilotMega
                 }
 
                 // Tell the connection UI that we are now connected.
-                this._connectionControl.IsConnected(true);
+                _connectionControl.IsConnected(true);
 
                 // Here we want to reset the connection stats counter etc.
                 this.ResetConnectionStats();
@@ -685,7 +687,7 @@ namespace ArdupilotMega
                         }
                     }
                     catch (Exception exp3) { log.Error(exp3); }
-                    MessageBox.Show("Can not establish a connection\n\n" + ex.Message);
+                    CustomMessageBox.Show("Can not establish a connection\n\n" + ex.Message);
                     return;
                 }
             }
@@ -1475,7 +1477,7 @@ namespace ArdupilotMega
 
                         foreach (var point in MainV2.comPort.wps.Values)
                         {
-                                coords.Add(new SharpKml.Base.Vector(point.x, point.y, point.z));
+                            coords.Add(new SharpKml.Base.Vector(point.x, point.y, point.z));
                         }
 
                         SharpKml.Dom.LineString ls = new SharpKml.Dom.LineString();
@@ -1586,6 +1588,40 @@ namespace ArdupilotMega
                         GCSViews.FlightData.mymap.streamjpgenable = false;
                         GCSViews.FlightData.myhud.streamjpgenable = false;
                         stream.Close();
+
+                    }
+                    else if (url.Contains("guided?"))
+                    {
+                        //http://127.0.0.1:56781/guided?lat=-34&lng=117.8&alt=30
+
+                        Regex rex = new Regex(@"lat=([\-\.0-9]+)&lng=([\-\.0-9]+)&alt=([\.0-9]+)",RegexOptions.IgnoreCase);
+
+                        Match match = rex.Match(url);
+
+                        if (match.Success)
+                        {
+                            Locationwp gwp = new Locationwp()
+                            {
+                                lat = float.Parse(match.Groups[1].Value),
+                                lng = float.Parse(match.Groups[2].Value),
+                                alt = float.Parse(match.Groups[3].Value)
+                            };
+                            try
+                            {
+                                comPort.setGuidedModeWP(gwp);
+                            }
+                            catch { }
+
+                            string header = "HTTP/1.1 200 OK\r\n\r\nSent Guide Mode Wp";
+                            byte[] temp = asciiEncoding.GetBytes(header);
+                            stream.Write(temp, 0, temp.Length);
+                        }
+                        else
+                        {
+                            string header = "HTTP/1.1 200 OK\r\n\r\nFailed Guide Mode Wp";
+                            byte[] temp = asciiEncoding.GetBytes(header);
+                            stream.Write(temp, 0, temp.Length);
+                        }
 
                     }
                     stream.Close();
@@ -2005,7 +2041,7 @@ namespace ArdupilotMega
                             }
                         }
                         catch { }
-                    //    log.Debug(file + " " + bytes);
+                        //    log.Debug(file + " " + bytes);
                         int len = dataStream.Read(buf1, 0, 1024);
                         if (len == 0)
                             break;
@@ -2222,11 +2258,18 @@ namespace ArdupilotMega
                     {
                         case Common.distances.Meters:
                             MainV2.cs.multiplierdist = 1;
+                            MainV2.cs.DistanceUnit = "Meters";
                             break;
                         case Common.distances.Feet:
                             MainV2.cs.multiplierdist = 3.2808399f;
+                            MainV2.cs.DistanceUnit = "Feet";
                             break;
                     }
+                }
+                else
+                {
+                    MainV2.cs.multiplierdist = 1;
+                    MainV2.cs.DistanceUnit = "Meters";
                 }
 
                 // speed
@@ -2236,20 +2279,30 @@ namespace ArdupilotMega
                     {
                         case Common.speeds.ms:
                             MainV2.cs.multiplierspeed = 1;
+                            MainV2.cs.SpeedUnit = "m/s";
                             break;
                         case Common.speeds.fps:
                             MainV2.cs.multiplierdist = 3.2808399f;
+                            MainV2.cs.SpeedUnit = "fps";
                             break;
                         case Common.speeds.kph:
                             MainV2.cs.multiplierspeed = 3.6f;
+                            MainV2.cs.SpeedUnit = "kph";
                             break;
                         case Common.speeds.mph:
                             MainV2.cs.multiplierspeed = 2.23693629f;
+                            MainV2.cs.SpeedUnit = "mph";
                             break;
                         case Common.speeds.knots:
                             MainV2.cs.multiplierspeed = 1.94384449f;
+                            MainV2.cs.SpeedUnit = "knots";
                             break;
                     }
+                }
+                else
+                {
+                    MainV2.cs.multiplierspeed = 1;
+                    MainV2.cs.SpeedUnit = "m/s";
                 }
             }
             catch { }
@@ -2287,13 +2340,24 @@ namespace ArdupilotMega
 
         private void MainMenu_MouseLeave(object sender, EventArgs e)
         {
-            //MainMenu.Visible = false;
+            if (_connectionControl.PointToClient(Control.MousePosition).Y < MainMenu.Height)
+                return;            
+
+            this.SuspendLayout();
+
+            panel1.Visible = false;
+
+            this.ResumeLayout();
         }
 
-        private void MainV2_MouseMove(object sender, MouseEventArgs e)
+        void menu_MouseEnter(object sender, EventArgs e)
         {
-           // if (e.Y < 50)
-           //     MainMenu.Visible = true;
+            this.SuspendLayout();
+            panel1.Location = new Point(0,0);
+            panel1.Width = menu.Width;
+            panel1.BringToFront();
+            panel1.Visible = true;
+            this.ResumeLayout();
         }
     }
 }

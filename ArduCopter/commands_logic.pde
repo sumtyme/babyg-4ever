@@ -148,11 +148,7 @@ static bool verify_must()
         break;
 
     case MAV_CMD_NAV_LAND:
-        if(g.sonar_enabled == true) {
-            return verify_land_sonar();
-        }else{
-            return verify_land_baro();
-        }
+        return verify_land();
         break;
 
     case MAV_CMD_NAV_LOITER_UNLIM:
@@ -213,23 +209,29 @@ static bool verify_may()
 //
 /********************************************************************************/
 
+// do_RTL - start Return-to-Launch
 static void do_RTL(void)
 {
-    // TODO: Altitude option from mission planner
-    Location temp   = home;
-    temp.alt                = get_RTL_alt();
+    // set rtl state
+    rtl_state = RTL_STATE_RETURNING_HOME;
 
-    //so we know where we are navigating from
-    // --------------------------------------
-    next_WP                 = current_loc;
+    // set roll, pitch and yaw modes
+    roll_pitch_mode     = RTL_RP;
+    yaw_mode            = YAW_AUTO;
+    auto_yaw_tracking   = MAV_ROI_WPNEXT;
+    set_throttle_mode(RTL_THR);
 
-    // Loads WP from Memory
-    // --------------------
-    set_next_WP(&temp);
+    // set navigation mode
+    wp_control = WP_MODE;
 
+    // so we know where we are navigating from
+    next_WP = current_loc;
 
-    // We want to come home and stop on a dime
-    slow_wp = true;
+    // Set navigation target to home
+    set_next_WP(&home);
+
+    // override altitude to RTL altitude
+    set_new_altitude(get_RTL_alt());
 
     // output control mode to the ground station
     // -----------------------------------------
@@ -260,7 +262,6 @@ static void do_takeoff()
 static void do_nav_wp()
 {
     wp_control = WP_MODE;
-    slow_wp = false;
 
     set_next_WP(&command_nav_queue);
 
@@ -281,29 +282,17 @@ static void do_nav_wp()
 static void do_land()
 {
     wp_control = LOITER_MODE;
-
-    // just to make sure
-    land_complete           = false;
-
-    // landing boost lowers the main throttle to mimmick
-    // the effect of a user's hand
-    landing_boost           = 0;
-
-    // A counter that goes up if our climb rate stalls out.
-    ground_detector         = 0;
+    set_throttle_mode(THROTTLE_LAND);
 
     // hold at our current location
     set_next_WP(&current_loc);
-
-    // Set a new target altitude
-    set_new_altitude(0);
 }
 
 static void do_loiter_unlimited()
 {
     wp_control = LOITER_MODE;
 
-    //Serial.println("dloi ");
+    //cliSerial->println("dloi ");
     if(command_nav_queue.lat == 0) {
         set_next_WP(&current_loc);
         wp_control = LOITER_MODE;
@@ -366,74 +355,22 @@ static bool verify_takeoff()
     return (current_loc.alt > next_WP.alt);
 }
 
-// called at 10hz
-static bool verify_land_sonar()
+// verify_land - returns true if landing has been completed
+static bool verify_land()
 {
+    // loiter above 3m
     if(current_loc.alt > 300) {
         wp_control = LOITER_MODE;
-        ground_detector = 0;
-    }else{
-        // begin to pull down on the throttle
-        landing_boost++;
-        landing_boost = min(landing_boost, 40);
     }
 
-    if(current_loc.alt < 200 ) {
-        wp_control      = NO_NAV_MODE;
-    }
-
-    if(current_loc.alt < 150 ) {
-        // if we are low or don't seem to be decending much, increment ground detector
-        if(current_loc.alt < 80 || abs(climb_rate) < 20) {
-            landing_boost++;              // reduce the throttle at twice the normal rate
-
-            if(ground_detector < 30) {
-                ground_detector++;
-            }else if (ground_detector == 30) {
-                land_complete = true;
-                if(g.rc_3.control_in == 0) {
-                    ground_detector++;
-                    init_disarm_motors();
-                }
-                return true;
-            }
-        }
-    }
-    return false;
-}
-
-static bool verify_land_baro()
-{
-    if(current_loc.alt > 300) {
-        wp_control = LOITER_MODE;
-        ground_detector = 0;
-    }else{
-        // begin to pull down on the throttle
-        landing_boost++;
-        landing_boost = min(landing_boost, 40);
-    }
-
+    // turn off loiter below 1m
+    // To-Do: instead of turning off loiter we should make loiter less aggressive
     if(current_loc.alt < 100 ) {
         wp_control      = NO_NAV_MODE;
     }
 
-    if(current_loc.alt < 200 ) {
-        if(abs(climb_rate) < 40) {
-            landing_boost++;
-
-            if(ground_detector < 30) {
-                ground_detector++;
-            }else if (ground_detector == 30) {
-                land_complete = true;
-                if(g.rc_3.control_in == 0) {
-                    ground_detector++;
-                    init_disarm_motors();
-                }
-                return true;
-            }
-        }
-    }
-    return false;
+    // rely on THROTTLE_LAND mode to correctly update landing status
+    return ap.land_complete;
 }
 
 static bool verify_nav_wp()
@@ -449,7 +386,7 @@ static bool verify_nav_wp()
     }
 
     // Did we pass the WP?	// Distance checking
-    if((wp_distance <= (waypoint_radius * 100)) || check_missed_wp()) {
+    if((wp_distance <= (g.waypoint_radius * 100)) || check_missed_wp()) {
 
         // if we have a distance calc error, wp_distance may be less than 0
         if(wp_distance > 0) {
@@ -471,15 +408,13 @@ static bool verify_nav_wp()
         if ((millis() - loiter_time) > loiter_time_max) {
             wp_verify_byte |= NAV_DELAY;
             //gcs_send_text_P(SEVERITY_LOW,PSTR("verify_must: LOITER time complete"));
-            //Serial.println("vlt done");
+            //cliSerial->println("vlt done");
         }
     }
 
     if(wp_verify_byte >= 7) {
         //if(wp_verify_byte & NAV_LOCATION){
-        char message[30];
-        sprintf(message,"Reached Command #%i",command_nav_index);
-        gcs_send_text(SEVERITY_LOW,message);
+        gcs_send_text_fmt(PSTR("Reached Command #%i"),command_nav_index);
         wp_verify_byte = 0;
         copter_leds_nav_blink = 15;             // Cause the CopterLEDs to blink three times to indicate waypoint reached
         return true;
@@ -515,7 +450,7 @@ static bool verify_loiter_time()
 
 static bool verify_loiter_turns()
 {
-    //Serial.printf("loiter_sum: %d \n", loiter_sum);
+    //cliSerial->printf("loiter_sum: %d \n", loiter_sum);
     // have we rotated around the center enough times?
     // -----------------------------------------------
     if(abs(loiter_sum) > loiter_total) {
@@ -528,19 +463,79 @@ static bool verify_loiter_turns()
     return false;
 }
 
+// verify_RTL - handles any state changes required to implement RTL
+// do_RTL should have been called once first to initialise all variables
+// returns true with RTL has completed successfully
 static bool verify_RTL()
 {
-    wp_control      = WP_MODE;
+    bool retval = false;
 
-    // Did we pass the WP?	// Distance checking
-    if((wp_distance <= (g.waypoint_radius * 100)) || check_missed_wp()) {
-        wp_control      = LOITER_MODE;
+    switch( rtl_state ) {
 
-        //gcs_send_text_P(SEVERITY_LOW,PSTR("Reached home"));
-        return true;
-    }else{
-        return false;
+        case RTL_STATE_RETURNING_HOME:
+            // if we've reached home initiate loiter
+            if (wp_distance <= g.waypoint_radius * 100 || check_missed_wp()) {
+                rtl_state = RTL_STATE_LOITERING_AT_HOME;
+                wp_control = LOITER_MODE;
+
+                // set loiter timer
+                rtl_loiter_start_time = millis();
+
+                // give pilot back control of yaw
+                yaw_mode = YAW_HOLD;
+            }
+            break;
+
+        case RTL_STATE_LOITERING_AT_HOME:
+            // check if we've loitered long enough
+            if( millis() - rtl_loiter_start_time > (uint32_t)g.rtl_loiter_time.get() ) {
+                // initiate landing or descent
+                if(g.rtl_alt_final == 0) {
+                    // land
+                    do_land();
+                    // override landing location (do_land defaults to current location)
+                    next_WP.lat = home.lat;
+                    next_WP.lng = home.lng;
+                    // update RTL state
+                    rtl_state = RTL_STATE_LAND;
+                }else{
+                    // descend
+                    if(current_loc.alt > g.rtl_alt_final) {
+                        set_new_altitude(g.rtl_alt_final);
+                    }
+                    // update RTL state
+                    rtl_state = RTL_STATE_FINAL_DESCENT;
+                }
+            }
+            break;
+
+        case RTL_STATE_FINAL_DESCENT:
+            // rely on altitude check to confirm we have reached final altitude
+            if(current_loc.alt <= g.rtl_alt_final || alt_change_flag == REACHED_ALT) {
+                // switch to regular loiter mode
+                set_mode(LOITER);
+                // override location and altitude
+                set_next_WP(&home);
+                // override altitude to RTL altitude
+                set_new_altitude(g.rtl_alt_final);
+                retval = true;
+            }
+            break;
+
+        case RTL_STATE_LAND:
+            // rely on verify_land to return correct status
+            retval = verify_land();
+            break;
+
+        default:
+            // this should never happen
+            // TO-DO: log an error
+            retval = true;
+            break;
     }
+
+    // true is returned if we've successfully completed RTL
+    return retval;
 }
 
 /********************************************************************************/
@@ -549,10 +544,10 @@ static bool verify_RTL()
 
 static void do_wait_delay()
 {
-    //Serial.print("dwd ");
+    //cliSerial->print("dwd ");
     condition_start = millis();
     condition_value = command_cond_queue.lat * 1000;     // convert to milliseconds
-    //Serial.println(condition_value,DEC);
+    //cliSerial->println(condition_value,DEC);
 }
 
 static void do_change_alt()
@@ -571,8 +566,8 @@ static void do_within_distance()
 
 static void do_yaw()
 {
-    //Serial.println("dyaw ");
-    yaw_tracking = MAV_ROI_NONE;
+    //cliSerial->println("dyaw ");
+    auto_yaw_tracking = MAV_ROI_NONE;
 
     // target angle in degrees
     command_yaw_start               = nav_yaw;     // current position
@@ -631,19 +626,19 @@ static void do_yaw()
 
 static bool verify_wait_delay()
 {
-    //Serial.print("vwd");
+    //cliSerial->print("vwd");
     if ((unsigned)(millis() - condition_start) > (unsigned)condition_value) {
-        //Serial.println("y");
+        //cliSerial->println("y");
         condition_value = 0;
         return true;
     }
-    //Serial.println("n");
+    //cliSerial->println("n");
     return false;
 }
 
 static bool verify_change_alt()
 {
-    //Serial.printf("change_alt, ca:%d, na:%d\n", (int)current_loc.alt, (int)next_WP.alt);
+    //cliSerial->printf("change_alt, ca:%d, na:%d\n", (int)current_loc.alt, (int)next_WP.alt);
     if ((int32_t)condition_start < next_WP.alt) {
         // we are going higer
         if(current_loc.alt > next_WP.alt) {
@@ -660,7 +655,7 @@ static bool verify_change_alt()
 
 static bool verify_within_distance()
 {
-    //Serial.printf("cond dist :%d\n", (int)condition_value);
+    //cliSerial->printf("cond dist :%d\n", (int)condition_value);
     if (wp_distance < condition_value) {
         condition_value = 0;
         return true;
@@ -670,7 +665,7 @@ static bool verify_within_distance()
 
 static bool verify_yaw()
 {
-    //Serial.printf("vyaw %d\n", (int)(nav_yaw/100));
+    //cliSerial->printf("vyaw %d\n", (int)(nav_yaw/100));
 
     if((millis() - command_yaw_start_time) > command_yaw_time) {
         // time out
@@ -681,7 +676,7 @@ static bool verify_yaw()
         // TO-DO: there's still a problem with Condition_yaw, it will do it two times(probably more) sometimes, if it hasn't reached the next waypoint yet.
         // it should only do it one time so there should be code here to prevent another Condition_Yaw.
 
-        //Serial.println("Y");
+        //cliSerial->println("Y");
         return true;
 
     }else{
@@ -696,7 +691,7 @@ static bool verify_yaw()
         }
         nav_yaw         = wrap_360(nav_yaw);
         auto_yaw        = nav_yaw;
-        //Serial.printf("ny %ld\n",nav_yaw);
+        //cliSerial->printf("ny %ld\n",nav_yaw);
         return false;
     }
 }
@@ -745,9 +740,9 @@ static void do_change_speed()
 
 static void do_target_yaw()
 {
-    yaw_tracking = command_cond_queue.p1;
+    auto_yaw_tracking = command_cond_queue.p1;
 
-    if(yaw_tracking == MAV_ROI_LOCATION) {
+    if(auto_yaw_tracking == MAV_ROI_LOCATION) {
         target_WP = command_cond_queue;
     }
 }
@@ -764,27 +759,27 @@ static void do_jump()
     // when in use, it contains the current remaining jumps
     static int8_t jump = -10;                                                                   // used to track loops in jump command
 
-    //Serial.printf("do Jump: %d\n", jump);
+    //cliSerial->printf("do Jump: %d\n", jump);
 
     if(jump == -10) {
-        //Serial.printf("Fresh Jump\n");
+        //cliSerial->printf("Fresh Jump\n");
         // we use a locally stored index for jump
         jump = command_cond_queue.lat;
     }
-    //Serial.printf("Jumps left: %d\n",jump);
+    //cliSerial->printf("Jumps left: %d\n",jump);
 
     if(jump > 0) {
-        //Serial.printf("Do Jump to %d\n",command_cond_queue.p1);
+        //cliSerial->printf("Do Jump to %d\n",command_cond_queue.p1);
         jump--;
         change_command(command_cond_queue.p1);
 
     } else if (jump == 0) {
-        //Serial.printf("Did last jump\n");
+        //cliSerial->printf("Did last jump\n");
         // we're done, move along
         jump = -11;
 
     } else if (jump == -1) {
-        //Serial.printf("jumpForever\n");
+        //cliSerial->printf("jumpForever\n");
         // repeat forever
         change_command(command_cond_queue.p1);
     }
@@ -799,7 +794,8 @@ static void do_set_home()
         home.lng        = command_cond_queue.lng;                                       // Lon * 10**7
         home.lat        = command_cond_queue.lat;                                       // Lat * 10**7
         home.alt        = 0;
-        home_is_set = true;
+        //home_is_set 	= true;
+        set_home_is_set(true);
     }
 }
 
@@ -868,7 +864,7 @@ static void do_nav_roi()
 
     // check if mount type requires us to rotate the quad
     if( camera_mount.get_mount_type() != AP_Mount::k_pan_tilt && camera_mount.get_mount_type() != AP_Mount::k_pan_tilt_roll ) {
-        yaw_tracking = MAV_ROI_LOCATION;
+        auto_yaw_tracking = MAV_ROI_LOCATION;
         target_WP = command_nav_queue;
         auto_yaw = get_bearing_cd(&current_loc, &target_WP);
     }
@@ -883,7 +879,7 @@ static void do_nav_roi()
     //		4: point at a target given a target id (can't be implmented)
 #else
     // if we have no camera mount simply rotate the quad
-    yaw_tracking = MAV_ROI_LOCATION;
+    auto_yaw_tracking = MAV_ROI_LOCATION;
     target_WP = command_nav_queue;
     auto_yaw = get_bearing_cd(&current_loc, &target_WP);
 #endif

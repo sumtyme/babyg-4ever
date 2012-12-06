@@ -43,13 +43,9 @@
 #define FLIGHT_MODE_5         MANUAL       // pos 4
 #define FLIGHT_MODE_6         MANUAL       // pos 5 ---
 
-#define ENABLE_AIR_START      DISABLED
-
 #define MANUAL_LEVEL	      DISABLED
 
 #define TURN_GAIN		5
-
-#define CLOSED_LOOP_NAV       ENABLED     // set to ENABLED if closed loop navigation else set to DISABLED (Return To Lauch)
 
 #define MAX_DIST             50  //300       // max distance (in m) for the HEADALT mode
 #define SARSEC_BRANCH        50              // Long branch of the SARSEC pattern
@@ -138,8 +134,6 @@ This feature works only if the ROV_AWPR_NAV is set to 0
 //
 #define AUTO_TRIM           ENABLED
 #define THROTTLE_FAILSAFE   DISABLED
-
-//#define ENABLE_AIR_START    0
 
 //////////////////////////////////////////////////////////////////////////////
 // Autopilot control limits
@@ -416,25 +410,7 @@ This feature works only if the ROV_AWPR_NAV is set to 0
 // mainly intended to allow users to start using the APM without running the
 // WaypointWriter first.
 //
-// LOITER_RADIUS_DEFAULT                    OPTIONAL
-//
-// When the user performs a factory reset on the APM, set the loiter radius
-// (the distance the APM will attempt to maintain from a waypoint while
-// loitering) to this value in meters.  This is mainly intended to allow
-// users to start using the APM without running the WaypointWriter first.
-//
-// USE_CURRENT_ALT							OPTIONAL
-// ALT_HOLD_HOME							OPTIONAL
-//
-// When the user performs a factory reset on the APM, set the flag for weather
-// the current altitude or ALT_HOLD_HOME altitude should be used for Return To Launch.
-// Also, set the value of USE_CURRENT_ALT in meters.  This is mainly intended to allow
-// users to start using the APM without running the WaypointWriter first.
-//
 #define WP_RADIUS_DEFAULT       1   // meters
-#define LOITER_RADIUS_DEFAULT	5   // 60
-#define USE_CURRENT_ALT		TRUE
-#define ALT_HOLD_HOME		0
 
 //////////////////////////////////////////////////////////////////////////////
 // INPUT_VOLTAGE                            OPTIONAL

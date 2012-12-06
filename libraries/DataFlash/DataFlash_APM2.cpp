@@ -58,7 +58,7 @@ extern "C" {
  #  //*/
 
 // DataFlash is connected to Serial Port 3 (we will use SPI mode)
-#if defined(__AVR_ATmega1280__) || defined(__AVR_ATmega2560__)
+#if defined(__AVR_ATmega1280__) || defined(__AVR_ATmega2560__) || defined(DESKTOP_BUILD)
  #define DF_DATAOUT 14               // MOSI
  #define DF_DATAIN  15               // MISO
  #define DF_SPICLOCK  PJ2            // SCK
@@ -97,8 +97,8 @@ unsigned char DataFlash_APM2::SPI_transfer(unsigned char data)
 
     // get spi3 semaphore if required.  if failed to get semaphore then
     // just quietly fail
-    if ( _semaphore != NULL) {
-        if( !_semaphore->get(this) ) {
+    if ( _spi3_semaphore != NULL) {
+        if( !_spi3_semaphore->get(this) ) {
             return 0;
         }
     }
@@ -113,8 +113,8 @@ unsigned char DataFlash_APM2::SPI_transfer(unsigned char data)
     retval = UDR3;
 
     // release spi3 semaphore
-    if ( _semaphore != NULL) {
-        _semaphore->release(this);
+    if ( _spi3_semaphore != NULL) {
+        _spi3_semaphore->release(this);
     }
 
     return retval;

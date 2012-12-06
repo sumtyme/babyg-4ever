@@ -17,7 +17,7 @@ public:
     // The increment will prevent old parameters from being used incorrectly
     // by newer code.
     //
-    static const uint16_t k_format_version = 13;
+    static const uint16_t k_format_version = 14;
 
 	// The parameter software_type is set up solely for ground station use
 	// and identifies the software type (eg ArduPilotMega versus ArduCopterMega)
@@ -37,19 +37,19 @@ public:
         k_param_auto_trim,
         k_param_switch_enable,
         k_param_log_bitmask,
-        k_param_pitch_trim,
-        k_param_mix_mode,
-        k_param_reverse_elevons,
-        k_param_reverse_ch1_elevon,
-        k_param_reverse_ch2_elevon,
-        k_param_flap_1_percent,
-        k_param_flap_1_speed,
-        k_param_flap_2_percent,
-        k_param_flap_2_speed,
+        k_param_mix_mode, // unused
+        k_param_reverse_elevons, // unused
+        k_param_reverse_ch1_elevon, // unused
+        k_param_reverse_ch2_elevon, // unused
+        k_param_flap_1_percent, // unused
+        k_param_flap_1_speed, // unused
+        k_param_flap_2_percent, // unused
+        k_param_flap_2_speed, // unused
         k_param_num_resets,
         k_param_log_last_filenumber,		// *** Deprecated - remove with next eeprom number change
         k_param_reset_switch_chan,
-        k_param_manual_level,		
+        k_param_manual_level,
+        k_param_ins,                        // libraries/AP_InertialSensor variables        
 
 
 	// 110: Telemetry control
@@ -70,8 +70,8 @@ public:
         //
         // 130: Sensor parameters
         //
-        k_param_imu = 130,  // sensor calibration
-        k_param_altitude_mix,
+        k_param_imu = 130,  
+        k_param_altitude_mix,   // sensor calibration
         k_param_airspeed_ratio,
         k_param_ground_temperature,
         k_param_ground_pressure,
@@ -89,7 +89,7 @@ public:
  	k_param_sonar_type,
 #endif
 #endif
-	k_param_airspeed_enabled,
+        k_param_ahrs,  // AHRS group
         
         //
         // 150: Navigation parameters
@@ -100,8 +100,6 @@ public:
         k_param_pitch_limit_max,
         k_param_pitch_limit_min,
         k_param_airspeed_cruise,
-        k_param_RTL_altitude,
-        k_param_inverted_flight_ch,
         k_param_min_gndspeed,
         k_param_ch7_option,
         //
@@ -124,13 +122,13 @@ public:
 
         k_param_short_fs_action,
         k_param_long_fs_action,
-	k_param_gcs_heartbeat_fs_enabled,
+        k_param_gcs_heartbeat_fs_enabled,
         k_param_throttle_slewrate,
 
  // ************************************************************
         // 180: APMrover parameters - JLN update
         
-        k_param_closed_loop_nav,
+        k_param_closed_loop_nav, // unused
         k_param_auto_wp_radius,
         k_param_sonar_trigger,
         k_param_turn_gain,
@@ -140,10 +138,10 @@ public:
 //
         // 200: Feed-forward gains
         //
-        k_param_kff_pitch_compensation = 200,
-        k_param_kff_rudder_mix,
-        k_param_kff_pitch_to_throttle,
-        k_param_kff_throttle_to_pitch,
+        k_param_kff_pitch_compensation = 200, // unused
+        k_param_kff_rudder_mix, // unused
+        k_param_kff_pitch_to_throttle, // unused
+        k_param_kff_throttle_to_pitch, // unused
 
         //
         // 210: flight modes
@@ -163,12 +161,15 @@ public:
         k_param_command_total,
         k_param_command_index,
         k_param_waypoint_radius,
-        k_param_loiter_radius,
+        k_param_loiter_radius, // unused
         k_param_fence_action,
         k_param_fence_total,
         k_param_fence_channel,
         k_param_fence_minalt,
         k_param_fence_maxalt,
+
+        // other objects
+        k_param_sitl = 230,
 
         //
         // 240: PID Controllers
@@ -237,13 +238,6 @@ public:
         AP_Int8	    serial3_baud;
         AP_Int8     telem_delay;
 
-        // Feed-forward gains
-        //
-        AP_Float    kff_pitch_compensation;
-        AP_Float    kff_rudder_mix;
-        AP_Float    kff_pitch_to_throttle;
-        AP_Float    kff_throttle_to_pitch;
-    
         // Crosstrack navigation
         //
         AP_Float    crosstrack_gain;
@@ -261,14 +255,6 @@ public:
         AP_Int8     command_total;
         AP_Int8     command_index;
         AP_Int8     waypoint_radius;
-        AP_Int8     loiter_radius;
-    #if GEOFENCE_ENABLED == ENABLED
-        AP_Int8     fence_action;
-        AP_Int8     fence_total;
-        AP_Int8     fence_channel;
-        AP_Int16    fence_minalt; // meters
-        AP_Int16    fence_maxalt; // meters
-    #endif
     
         // Fly-by-wire
         //
@@ -309,11 +295,6 @@ public:
         // Misc
         //
         AP_Int8     auto_trim;
-        AP_Int8     switch_enable;
-        AP_Int8     mix_mode;
-        AP_Int8     reverse_elevons;
-        AP_Int8     reverse_ch1_elevon;
-        AP_Int8     reverse_ch2_elevon;
         AP_Int16    num_resets;
         AP_Int16    log_bitmask;
         AP_Int16    log_last_filenumber;		// *** Deprecated - remove with next eeprom number change
@@ -323,8 +304,6 @@ public:
         AP_Int16    min_gndspeed;
         AP_Int8	    ch7_option;
         
-        AP_Int16    pitch_trim;
-        AP_Int16    RTL_altitude;
         AP_Int16    ground_temperature;
         AP_Int32    ground_pressure;
         AP_Int8	    compass_enabled;
@@ -334,7 +313,6 @@ public:
         AP_Float    curr_amp_per_volt;
         AP_Float    input_voltage;
 	AP_Int16    pack_capacity;		// Battery pack capacity less reserve
-        AP_Int8	    inverted_flight_ch; // 0=disabled, 1-8 is channel for inverted flight trigger
 #if HIL_MODE != HIL_MODE_ATTITUDE
 #if CONFIG_SONAR == ENABLED     
         AP_Int8	    sonar_enabled;
@@ -343,16 +321,10 @@ public:
 				  // 3 = HRLV 
 #endif
 #endif
-        AP_Int8	    airspeed_enabled;
-        AP_Int8	    flap_1_percent;
-        AP_Int8	    flap_1_speed;
-        AP_Int8	    flap_2_percent;
-        AP_Int8	    flap_2_speed;
 
 // ************ ThermoPilot parameters  ************************ 
 //  - JLN update
 
-        AP_Int8     closed_loop_nav;
         AP_Int8     auto_wp_radius;
         AP_Int16    sonar_trigger;
         AP_Int16    turn_gain;
@@ -406,22 +378,4 @@ public:
 extern const AP_Param::Info var_info[];
 
 #endif // PARAMETERS_H
-
-/* ************ ThermoPilot parameters  (old parameters setup ) ************************
-
-        low_rate_turn           (LOW_RATE_TURN,             k_param_low_rate_turn,          PSTR("TP_LOWR_TURN")),
-        medium_rate_turn        (MEDIUM_RATE_TURN,          k_param_medium_rate_turn,       PSTR("TP_MEDR_TURN")),
-        high_rate_turn          (HIGH_RATE_TURN,            k_param_high_rate_turn,         PSTR("TP_HIGR_TURN")),
-        search_mode_turn        (SEARCH_MODE_TURN,          k_param_search_mode_turn,       PSTR("TP_SRCM_TURN")),
-        slope_thermal           (SLOPE_THERMAL,             k_param_slope_thermal,          PSTR("TP_SLOPE_THER")),
-        auto_thermal            (AUTO_THERMAL,              k_param_auto_thermal,           PSTR("TP_AUTO_THER")),
-        stab_thermal            (STAB_THERMAL,              k_param_auto_thermal,           PSTR("TP_STAB_THER")),
-        closed_loop_nav         (CLOSED_LOOP_NAV,           k_param_closed_loop_nav,        PSTR("TP_CL_NAV")),
-        auto_wp_radius          (AUTO_WP_RADIUS,            k_param_closed_loop_nav,        PSTR("TP_AWPR_NAV")), 
-        min_alt                 (MIN_ALT,                   k_param_min_alt,                PSTR("TP_MIN_ALT")),        
-        max_alt                 (MAX_ALT,                   k_param_max_alt,                PSTR("TP_MAX_ALT")), 
-        max_dist                (MAX_DIST,                  k_param_max_dist,               PSTR("TP_MAX_DIST")), 
-        sarsec_branch           (SARSEC_BRANCH,             k_param_sarsec_branch,          PSTR("TP_SARSEC")), 
-       
- ************************************************************/
 

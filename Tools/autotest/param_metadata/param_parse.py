@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 import os, glob, re
 
 from param import *
@@ -13,7 +15,7 @@ prog_groups = re.compile(r"@Group:\s*(\w+).*((?:\n\s*//\s*@(\w+): (.*))+)\s*G", 
     
 prog_group_param = re.compile(r"@Param:\s*(\w+).*((?:\n\s*//\s*@(\w+): (.*))+)\s*AP_", re.MULTILINE)
 
-prog_values_field = re.compile(r"\s*(\w+:\w+)+,*")
+prog_values_field = re.compile(r"\s*(-?\w+:\w+)+,*")
 
 def camelcase_escape(word):
     if re.match(r"([A-Z][a-z]+[A-Z][a-z]*)", word.strip()):
@@ -59,6 +61,7 @@ def wiki_parameters(g, f):
 
 apm_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), '../../../')
 vehicle_paths = glob.glob(apm_path + "*/Parameters.pde")
+vehicle_paths.sort(reverse=True)
 
 vehicles = []
 libraries = []

@@ -23,13 +23,8 @@ namespace ArdupilotMega.GCSViews.ConfigurationView
         {
             try
             {
-#if MAVLINK10
                 Log.Info("Sending level command (mavlink 1.0)");                
-                MainV2.comPort.doCommand(MAVLink.MAV_CMD.PREFLIGHT_CALIBRATION,1,0,0,0,1,0,0);
-#else
-                Log.Info("Sending level command (mavlink 0.9)");
-                MainV2.comPort.doAction(MAVLink.MAV_ACTION.MAV_ACTION_CALIBRATE_ACC);
-#endif
+                MainV2.comPort.doCommand(MAVLink.MAV_CMD.PREFLIGHT_CALIBRATION,1,0,0,0,0,0,0);
 
                 BUT_levelac2.Text = "Complete";
             }
@@ -108,8 +103,9 @@ namespace ArdupilotMega.GCSViews.ConfigurationView
 
         public void Deactivate()
         {
-            radioButton_Plus.CheckedChanged -= RadioButtonPlusCheckedChanged;
+            MainV2.giveComport = false;
 
+            radioButton_Plus.CheckedChanged -= RadioButtonPlusCheckedChanged;
         }
 
         void RadioButtonPlusCheckedChanged(object sender, EventArgs e)
@@ -118,6 +114,64 @@ namespace ArdupilotMega.GCSViews.ConfigurationView
                 SetX();
             else
                 SetPlus();
+        }
+
+        private void BUT_calib_accell_Click(object sender, EventArgs e)
+        {
+            if (MainV2.giveComport == true)
+            {
+                MainV2.comPort.BaseStream.WriteLine("");
+                return;
+            }
+
+            try
+            {
+                Log.Info("Sending accel command (mavlink 1.0)");
+                MainV2.giveComport = true;
+                MainV2.comPort.doCommand(MAVLink.MAV_CMD.PREFLIGHT_CALIBRATION, 0, 0, 0, 0, 1, 0, 0);
+                //MainV2.giveComport = false;
+
+                System.Threading.ThreadPool.QueueUserWorkItem(readmessage,this);
+
+                BUT_calib_accell.Text = "Click When Done";
+            }
+            catch (Exception ex)
+            {
+                MainV2.giveComport = false;
+                Log.Error("Exception on level", ex);
+                CustomMessageBox.Show("Failed to level : ac2 2.0.37+ is required");
+            }
+        }
+
+        static void readmessage(object item)
+        {
+            ConfigAccelerometerCalibrationQuad local = (ConfigAccelerometerCalibrationQuad)item;
+
+            while (!(MainV2.cs.message.Contains("Calibration successful") || MainV2.cs.message.Contains("Calibration failed")))
+            {
+                System.Threading.Thread.Sleep(10);
+                // read the message
+                MainV2.comPort.readPacket();
+                // update cs with the message
+                MainV2.cs.UpdateCurrentSettings(null);
+                // update user display
+                local.UpdateUserMessage();
+            }
+
+            MainV2.giveComport = false;
+
+            local.Invoke((MethodInvoker)delegate()
+            {
+                local.BUT_calib_accell.Text = "Done";
+            });
+        }
+
+        public void UpdateUserMessage()
+        {
+            this.Invoke((MethodInvoker)delegate()
+            {
+                 lbl_Accel_user.Text = MainV2.cs.message;
+            });
         }
     }
 }

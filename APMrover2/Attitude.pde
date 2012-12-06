@@ -15,13 +15,21 @@ static void learning()
 }
 
 
-static void crash_checker()
+/*****************************************
+* Throttle slew limit
+*****************************************/
+static void throttle_slew_limit(int16_t last_throttle)
 {
-	if(ahrs.pitch_sensor < -4500){
-		crash_timer = 255;
-	}
-	if(crash_timer > 0)
-		crash_timer--;
+    // if slew limit rate is set to zero then do not slew limit
+    if (g.throttle_slewrate) {                   
+        // limit throttle change by the given percentage per second
+        float temp = g.throttle_slewrate * G_Dt * 0.01 * fabs(g.channel_throttle.radio_max - g.channel_throttle.radio_min);
+        // allow a minimum change of 1 PWM per cycle
+        if (temp < 1) {
+            temp = 1;
+        }
+        g.channel_throttle.radio_out = constrain(g.channel_throttle.radio_out, last_throttle - temp, last_throttle + temp);
+    }
 }
 
 static void calc_throttle()
@@ -29,29 +37,15 @@ static void calc_throttle()
     
    int throttle_target = g.throttle_cruise + throttle_nudge + 50;   
    
-        target_airspeed = g.airspeed_cruise;    
+   rov_speed = g.airspeed_cruise;    
      
-   if(speed_boost)
-     rov_speed = g.booster * target_airspeed;
-   else 
-     rov_speed = target_airspeed;   
+   if (speed_boost)
+       rov_speed *= g.booster;
         
-        groundspeed_error = rov_speed - (float)ground_speed; 
+   groundspeed_error = rov_speed - (float)ground_speed; 
         
-        int throttle_req = (throttle_target + g.pidTeThrottle.get_pid(groundspeed_error)) * 10;
-        
-        if(g.throttle_slewrate > 0)
-        { if (throttle_req > throttle_last) 
-	      throttle = throttle + g.throttle_slewrate;
-          else if (throttle_req  < throttle_last) {
-	      throttle = throttle - g.throttle_slewrate;   
-          }
-    	  throttle =  constrain(throttle, 500, throttle_req);
-          throttle_last = throttle;
-        } else {
-          throttle = throttle_req;
-        }
-        g.channel_throttle.servo_out = constrain(((float)throttle / 10.0f), 0, g.throttle_max.get());
+   throttle = (throttle_target + g.pidTeThrottle.get_pid(groundspeed_error)) * 10;
+   g.channel_throttle.servo_out = constrain(((float)throttle / 10.0f), 0, g.throttle_max.get());
 }
 
 /*****************************************
@@ -60,7 +54,6 @@ static void calc_throttle()
 
 static void calc_nav_roll()
 {
-
 	// Adjust gain based on ground speed
 	nav_gain_scaler = (float)ground_speed / (g.airspeed_cruise * 100.0);
 	nav_gain_scaler = constrain(nav_gain_scaler, 0.2, 1.4);
@@ -68,17 +61,16 @@ static void calc_nav_roll()
 	// Calculate the required turn of the wheels rover
 	// ----------------------------------------
 
-        // negative error = left turn
+    // negative error = left turn
 	// positive error = right turn
 
 	nav_roll = g.pidNavRoll.get_pid(bearing_error, nav_gain_scaler);	//returns desired bank angle in degrees*100
 
-      if(obstacle) {  // obstacle avoidance 
+    if(obstacle) {  // obstacle avoidance 
 	    nav_roll += 9000;    // if obstacle in front turn 90° right	
-            speed_boost = false;
-      }
+        speed_boost = false;
+    }
 	nav_roll = constrain(nav_roll, -g.roll_limit.get(), g.roll_limit.get());
-
 }
 
 // Zeros out navigation Integrators if we are changing mode, have passed a waypoint, etc.
@@ -87,7 +79,6 @@ static void reset_I(void)
 {
 	g.pidNavRoll.reset_I();
 	g.pidTeThrottle.reset_I();
-//	g.pidAltitudeThrottle.reset_I();
 }
 
 /*****************************************
@@ -95,18 +86,7 @@ static void reset_I(void)
 *****************************************/
 static void set_servos(void)
 {
-	int flapSpeedSource = 0;
-
-	// vectorize the rc channels
-	RC_Channel_aux* rc_array[NUM_CHANNELS];
-	rc_array[CH_1] = NULL;
-	rc_array[CH_2] = NULL;
-	rc_array[CH_3] = NULL;
-	rc_array[CH_4] = NULL;
-	rc_array[CH_5] = &g.rc_5;
-	rc_array[CH_6] = &g.rc_6;
-	rc_array[CH_7] = &g.rc_7;
-	rc_array[CH_8] = &g.rc_8;
+    int16_t last_throttle = g.channel_throttle.radio_out;
 
 	if((control_mode == MANUAL) || (control_mode == LEARNING)){
 		// do a direct pass through of radio values
@@ -120,20 +100,21 @@ static void set_servos(void)
 		g.channel_throttle.radio_out 	= g.channel_throttle.radio_in;
 		g.channel_rudder.radio_out 	= g.channel_roll.radio_in;
 	} else {       
-                 
-                g.channel_roll.calc_pwm();
+        g.channel_roll.calc_pwm();
 		g.channel_pitch.calc_pwm();
 		g.channel_rudder.calc_pwm();             
 
 		g.channel_throttle.radio_out 	= g.channel_throttle.radio_in;
 		g.channel_throttle.servo_out = constrain(g.channel_throttle.servo_out, g.throttle_min.get(), g.throttle_max.get());
-
-        }
+    }
                 
-        if (control_mode >= FLY_BY_WIRE_B) {
-          // convert 0 to 100% into PWM
-            g.channel_throttle.calc_pwm();
-        }
+    if (control_mode >= AUTO) {
+        // convert 0 to 100% into PWM
+        g.channel_throttle.calc_pwm();
+
+        // limit throttle movement speed
+        throttle_slew_limit(last_throttle);
+    }
 
 
 #if HIL_MODE == HIL_MODE_DISABLED || HIL_SERVOS

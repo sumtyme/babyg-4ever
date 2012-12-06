@@ -11,6 +11,8 @@ FastSerialPort(Serial, 0);
 
 #ifdef DESKTOP_BUILD
 // all of this is needed to build with SITL
+ #include <SPI.h>
+ #include <I2C.h>
  #include <DataFlash.h>
  #include <APM_RC.h>
  #include <GCS_MAVLink.h>
@@ -20,12 +22,15 @@ FastSerialPort(Serial, 0);
  #include <AP_Baro.h>
  #include <AP_Compass.h>
  #include <AP_GPS.h>
+ #include <AP_Declination.h> // ArduPilot Mega Declination Helper Library
+ #include <AP_Semaphore.h>
+ #include <Filter.h>
+ #include <AP_Buffer.h>
+ #include <SITL.h>
 Arduino_Mega_ISR_Registry isr_registry;
 AP_Baro_BMP085_HIL barometer;
 AP_Compass_HIL compass;
 #endif
-
-#include <AP_Declination.h> // ArduPilot Mega Declination Helper Library
 
 
 // standard rotation matrices (these are the originals from the old code)
@@ -186,6 +191,37 @@ static void test_combinations(void)
     }
 }
 
+// test rotation method accuracy
+static void test_rotation_accuracy(void)
+{
+    Matrix3f attitude;
+    Vector3f small_rotation;
+    float roll, pitch, yaw;
+    int16_t i;
+    float rot_angle;
+
+    Serial.println("\nRotation method accuracy:");
+
+    for( i=0; i<90; i++ ) {
+
+        // reset initial attitude
+        attitude.from_euler(0,0,0);
+
+        // calculate small rotation vector
+        rot_angle = ToRad(i);
+        small_rotation = Vector3f(0,0,rot_angle);
+
+        // apply small rotation
+        attitude.rotate(small_rotation);
+
+        // get resulting attitude's euler angles
+        attitude.to_euler(&roll, &pitch, &yaw);
+
+        // display results
+        Serial.printf_P(PSTR("actual angle: %d\tcalculated angle:%4.2f\n"),(int)i,ToDeg(yaw));
+    }
+}
+
 /*
  *  rotation tests
  */
@@ -196,6 +232,7 @@ void setup(void)
     test_matrices();
     test_vectors();
     test_combinations();
+    test_rotation_accuracy();
     Serial.println("rotation unit tests done\n");
 }
 

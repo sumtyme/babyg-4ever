@@ -7,6 +7,9 @@ static int8_t	setup_radio			(uint8_t argc, const Menu::arg *argv);
 static int8_t	setup_show			(uint8_t argc, const Menu::arg *argv);
 static int8_t	setup_factory		(uint8_t argc, const Menu::arg *argv);
 static int8_t	setup_flightmodes	(uint8_t argc, const Menu::arg *argv);
+#if !defined( __AVR_ATmega1280__ )
+static int8_t   setup_accel_scale                       (uint8_t argc, const Menu::arg *argv);
+#endif
 static int8_t	setup_erase			(uint8_t argc, const Menu::arg *argv);
 static int8_t	setup_compass			(uint8_t argc, const Menu::arg *argv);
 static int8_t	setup_declination		(uint8_t argc, const Menu::arg *argv);
@@ -19,6 +22,9 @@ static const struct Menu::command setup_menu_commands[] PROGMEM = {
 	{"reset", 			setup_factory},
 	{"radio",			setup_radio},
 	{"modes",			setup_flightmodes},
+#if !defined( __AVR_ATmega1280__ )
+    {"accel",           setup_accel_scale},
+#endif
 	{"compass",			setup_compass},
 	{"declination",		setup_declination},
 	{"battery",			setup_batt_monitor},
@@ -34,7 +40,7 @@ static int8_t
 setup_mode(uint8_t argc, const Menu::arg *argv)
 {
 	// Give the user some guidance
-	Serial.printf_P(PSTR("Setup Mode\n"
+	cliSerial->printf_P(PSTR("Setup Mode\n"
 						 "\n"
 						 "IMPORTANT: if you have not previously set this system up, use the\n"
 						 "'reset' command to initialize the EEPROM to sensible default values\n"
@@ -60,10 +66,9 @@ setup_show(uint8_t argc, const Menu::arg *argv)
 	report_xtrack();
 	report_throttle();
 	report_flight_modes();
-	report_imu();
 	report_compass();
 
-	Serial.printf_P(PSTR("Raw Values\n"));
+	cliSerial->printf_P(PSTR("Raw Values\n"));
 	print_divider();
 
     AP_Param::show_all();
@@ -78,16 +83,16 @@ setup_factory(uint8_t argc, const Menu::arg *argv)
 {
 	int			c;
 
-	Serial.printf_P(PSTR("\nType 'Y' and hit Enter to perform factory reset, any other key to abort: "));
+	cliSerial->printf_P(PSTR("\nType 'Y' and hit Enter to perform factory reset, any other key to abort: "));
 
 	do {
-		c = Serial.read();
+		c = cliSerial->read();
 	} while (-1 == c);
 
 	if (('y' != c) && ('Y' != c))
 		return(-1);
 	AP_Param::erase_all();
-	Serial.printf_P(PSTR("\nFACTORY RESET complete - please reset APM to continue"));
+	cliSerial->printf_P(PSTR("\nFACTORY RESET complete - please reset APM to continue"));
 
 	//default_flight_modes();   // This will not work here.  Replacement code located in init_ardupilot()
 
@@ -103,7 +108,7 @@ setup_factory(uint8_t argc, const Menu::arg *argv)
 static int8_t
 setup_radio(uint8_t argc, const Menu::arg *argv)
 {
-	Serial.printf_P(PSTR("\n\nRadio Setup:\n"));
+	cliSerial->printf_P(PSTR("\n\nRadio Setup:\n"));
 	uint8_t i;
 
 	for(i = 0; i < 100;i++){
@@ -114,7 +119,7 @@ setup_radio(uint8_t argc, const Menu::arg *argv)
 
 	if(g.channel_roll.radio_in < 500){
 		while(1){
-			Serial.printf_P(PSTR("\nNo radio; Check connectors."));
+			cliSerial->printf_P(PSTR("\nNo radio; Check connectors."));
 			delay(1000);
 			// stop here
 		}
@@ -146,7 +151,7 @@ setup_radio(uint8_t argc, const Menu::arg *argv)
 	g.rc_7.radio_trim = 1500;
 	g.rc_8.radio_trim = 1500;
 
-	Serial.printf_P(PSTR("\nMove all controls to each extreme. Hit Enter to save: \n"));
+	cliSerial->printf_P(PSTR("\nMove all controls to each extreme. Hit Enter to save: \n"));
 	while(1){
 
 		delay(20);
@@ -163,8 +168,8 @@ setup_radio(uint8_t argc, const Menu::arg *argv)
 		g.rc_7.update_min_max();
 		g.rc_8.update_min_max();
 
-		if(Serial.available() > 0){
-			Serial.flush();
+		if(cliSerial->available() > 0){
+			cliSerial->flush();
 			g.channel_roll.save_eeprom();
 			g.channel_pitch.save_eeprom();
 			g.channel_throttle.save_eeprom();
@@ -188,7 +193,7 @@ setup_flightmodes(uint8_t argc, const Menu::arg *argv)
 {
 	byte switchPosition, mode = 0;
 
-	Serial.printf_P(PSTR("\nMove RC toggle switch to each position to edit, move aileron stick to select modes."));
+	cliSerial->printf_P(PSTR("\nMove RC toggle switch to each position to edit, move aileron stick to select modes."));
 	print_hit_enter();
 	trim_radio();
 
@@ -225,15 +230,12 @@ setup_flightmodes(uint8_t argc, const Menu::arg *argv)
 				mode != MANUAL &&
 				mode != CIRCLE &&
 				mode != LEARNING &&
-				mode != FLY_BY_WIRE_A &&
-				mode != FLY_BY_WIRE_B &&
 				mode != AUTO &&
-				mode != RTL &&
-				mode != LOITER)
+				mode != RTL) 
 			{
 				if (mode < MANUAL)
-					mode = LOITER;
-				else if (mode >LOITER)
+					mode = RTL;
+				else if (mode > RTL)
 					mode = MANUAL;
 				else
 					mode += radioInputSwitch;
@@ -251,7 +253,7 @@ setup_flightmodes(uint8_t argc, const Menu::arg *argv)
 		}
 
 		// escape hatch
-		if(Serial.available() > 0){
+		if(cliSerial->available() > 0){
 		    // save changes
             for (mode=0; mode<6; mode++)
                 flight_modes[mode].save();
@@ -276,10 +278,10 @@ setup_erase(uint8_t argc, const Menu::arg *argv)
 {
 	int			c;
 
-	Serial.printf_P(PSTR("\nType 'Y' and hit Enter to erase all waypoint and parameter data, any other key to abort: "));
+	cliSerial->printf_P(PSTR("\nType 'Y' and hit Enter to erase all waypoint and parameter data, any other key to abort: "));
 
 	do {
-		c = Serial.read();
+		c = cliSerial->read();
 	} while (-1 == c);
 
 	if (('y' != c) && ('Y' != c))
@@ -288,13 +290,54 @@ setup_erase(uint8_t argc, const Menu::arg *argv)
 	return 0;
 }
 
+/*
+  handle full accelerometer calibration via user dialog
+ */
+#if !defined( __AVR_ATmega1280__ )
+static void setup_printf_P(const prog_char_t *fmt, ...)
+{
+    va_list arg_list;
+    va_start(arg_list, fmt);
+    cliSerial->vprintf_P(fmt, arg_list);
+    va_end(arg_list);
+}
+
+static void setup_wait_key(void)
+{
+    // wait for user input
+    while (!cliSerial->available()) {
+        delay(20);
+    }
+    // clear input buffer
+    while( cliSerial->available() ) {
+        cliSerial->read();
+    }
+}
+
+static int8_t
+setup_accel_scale(uint8_t argc, const Menu::arg *argv)
+{
+    cliSerial->println_P(PSTR("Initialising gyros"));
+    ins.init(AP_InertialSensor::COLD_START, 
+             ins_sample_rate,
+             delay, flash_leds, &timer_scheduler);
+    if (ins.calibrate_accel(delay, flash_leds, setup_printf_P, setup_wait_key)) {
+        if (g.manual_level == 0) {
+            cliSerial->println_P(PSTR("Setting MANUAL_LEVEL to 1"));
+            g.manual_level.set_and_save(1);
+        }
+    }
+    return(0);
+}
+#endif
+
 static int8_t
 setup_compass(uint8_t argc, const Menu::arg *argv)
 {
 	if (!strcmp_P(argv[1].str, PSTR("on"))) {
         compass.set_orientation(MAG_ORIENTATION);	// set compass's orientation on aircraft
 		if (!compass.init()) {
-            Serial.println_P(PSTR("Compass initialisation failed!"));
+            cliSerial->println_P(PSTR("Compass initialisation failed!"));
             g.compass_enabled = false;
         } else {
             g.compass_enabled = true;
@@ -306,7 +349,7 @@ setup_compass(uint8_t argc, const Menu::arg *argv)
 		compass.set_offsets(0,0,0);
 
 	} else {
-		Serial.printf_P(PSTR("\nOptions:[on,off,reset]\n"));
+		cliSerial->printf_P(PSTR("\nOptions:[on,off,reset]\n"));
 		report_compass();
 		return 0;
 	}
@@ -323,7 +366,7 @@ setup_batt_monitor(uint8_t argc, const Menu::arg *argv)
 		g.battery_monitoring.set_and_save(argv[1].i);
 
 	} else {
-		Serial.printf_P(PSTR("\nOptions: 3-4"));
+		cliSerial->printf_P(PSTR("\nOptions: 3-4"));
 	}
 
 	report_batt_monitor();
@@ -337,17 +380,17 @@ setup_batt_monitor(uint8_t argc, const Menu::arg *argv)
 static void report_batt_monitor()
 {
 	//print_blanks(2);
-	Serial.printf_P(PSTR("Batt Mointor\n"));
+	cliSerial->printf_P(PSTR("Batt Mointor\n"));
 	print_divider();
-	if(g.battery_monitoring == 0)	Serial.printf_P(PSTR("Batt monitoring disabled"));
-	if(g.battery_monitoring == 3)	Serial.printf_P(PSTR("Monitoring batt volts"));
-	if(g.battery_monitoring == 4)	Serial.printf_P(PSTR("Monitoring volts and current"));
+	if(g.battery_monitoring == 0)	cliSerial->printf_P(PSTR("Batt monitoring disabled"));
+	if(g.battery_monitoring == 3)	cliSerial->printf_P(PSTR("Monitoring batt volts"));
+	if(g.battery_monitoring == 4)	cliSerial->printf_P(PSTR("Monitoring volts and current"));
 	print_blanks(2);
 }
 static void report_radio()
 {
 	//print_blanks(2);
-	Serial.printf_P(PSTR("Radio\n"));
+	cliSerial->printf_P(PSTR("Radio\n"));
 	print_divider();
 	// radio
 	print_radio_values();
@@ -357,28 +400,28 @@ static void report_radio()
 static void report_gains()
 {
 	//print_blanks(2);
-	Serial.printf_P(PSTR("Gains\n"));
+	cliSerial->printf_P(PSTR("Gains\n"));
 	print_divider();
 
-	Serial.printf_P(PSTR("servo roll:\n"));
+	cliSerial->printf_P(PSTR("servo roll:\n"));
 	print_PID(&g.pidServoRoll);
 
-	Serial.printf_P(PSTR("servo pitch:\n"));
+	cliSerial->printf_P(PSTR("servo pitch:\n"));
 	print_PID(&g.pidServoPitch);
 
-	Serial.printf_P(PSTR("servo rudder:\n"));
+	cliSerial->printf_P(PSTR("servo rudder:\n"));
 	print_PID(&g.pidServoRudder);
 
-	Serial.printf_P(PSTR("nav roll:\n"));
+	cliSerial->printf_P(PSTR("nav roll:\n"));
 	print_PID(&g.pidNavRoll);
 
-	Serial.printf_P(PSTR("nav pitch airspeed:\n"));
+	cliSerial->printf_P(PSTR("nav pitch airspeed:\n"));
 	print_PID(&g.pidNavPitchAirspeed);
 
-	Serial.printf_P(PSTR("energry throttle:\n"));
+	cliSerial->printf_P(PSTR("energry throttle:\n"));
 	print_PID(&g.pidTeThrottle);
 
-	Serial.printf_P(PSTR("nav pitch alt:\n"));
+	cliSerial->printf_P(PSTR("nav pitch alt:\n"));
 	print_PID(&g.pidNavPitchAltitude);
 
 	print_blanks(2);
@@ -387,10 +430,10 @@ static void report_gains()
 static void report_xtrack()
 {
 	//print_blanks(2);
-	Serial.printf_P(PSTR("Crosstrack\n"));
+	cliSerial->printf_P(PSTR("Crosstrack\n"));
 	print_divider();
 	// radio
-	Serial.printf_P(PSTR("XTRACK: %4.2f\n"
+	cliSerial->printf_P(PSTR("XTRACK: %4.2f\n"
 						 "XTRACK angle: %d\n"),
 						 (float)g.crosstrack_gain,
 						 (int)g.crosstrack_entry_angle);
@@ -400,10 +443,10 @@ static void report_xtrack()
 static void report_throttle()
 {
 	//print_blanks(2);
-	Serial.printf_P(PSTR("Throttle\n"));
+	cliSerial->printf_P(PSTR("Throttle\n"));
 	print_divider();
 
-	Serial.printf_P(PSTR("min: %d\n"
+	cliSerial->printf_P(PSTR("min: %d\n"
 						 "max: %d\n"
 						 "cruise: %d\n"
 						 "failsafe_enabled: %d\n"
@@ -416,34 +459,23 @@ static void report_throttle()
 	print_blanks(2);
 }
 
-static void report_imu()
-{
-	//print_blanks(2);
-	Serial.printf_P(PSTR("IMU\n"));
-	print_divider();
-
-	print_gyro_offsets();
-	print_accel_offsets();
-	print_blanks(2);
-}
-
 static void report_compass()
 {
 	//print_blanks(2);
-	Serial.printf_P(PSTR("Compass: "));
+	cliSerial->printf_P(PSTR("Compass: "));
 
     switch (compass.product_id) {
     case AP_COMPASS_TYPE_HMC5883L:
-        Serial.println_P(PSTR("HMC5883L"));
+        cliSerial->println_P(PSTR("HMC5883L"));
         break;
     case AP_COMPASS_TYPE_HMC5843:
-        Serial.println_P(PSTR("HMC5843"));
+        cliSerial->println_P(PSTR("HMC5843"));
         break;
     case AP_COMPASS_TYPE_HIL:
-        Serial.println_P(PSTR("HIL"));
+        cliSerial->println_P(PSTR("HIL"));
         break;
     default:
-        Serial.println_P(PSTR("??"));
+        cliSerial->println_P(PSTR("??"));
         break;
     }
 
@@ -452,13 +484,13 @@ static void report_compass()
 	print_enabled(g.compass_enabled);
 
 	// mag declination
-	Serial.printf_P(PSTR("Mag Declination: %4.4f\n"),
+	cliSerial->printf_P(PSTR("Mag Declination: %4.4f\n"),
 							degrees(compass.get_declination()));
 
 	Vector3f offsets = compass.get_offsets();
 
 	// mag offsets
-	Serial.printf_P(PSTR("Mag offsets: %4.4f, %4.4f, %4.4f\n"),
+	cliSerial->printf_P(PSTR("Mag offsets: %4.4f, %4.4f, %4.4f\n"),
 							offsets.x,
 							offsets.y,
 							offsets.z);
@@ -468,7 +500,7 @@ static void report_compass()
 static void report_flight_modes()
 {
 	//print_blanks(2);
-	Serial.printf_P(PSTR("Flight modes\n"));
+	cliSerial->printf_P(PSTR("Flight modes\n"));
 	print_divider();
 
 	for(int i = 0; i < 6; i++ ){
@@ -484,7 +516,7 @@ static void report_flight_modes()
 static void
 print_PID(PID * pid)
 {
-	Serial.printf_P(PSTR("P: %4.3f, I:%4.3f, D:%4.3f, IMAX:%ld\n"),
+	cliSerial->printf_P(PSTR("P: %4.3f, I:%4.3f, D:%4.3f, IMAX:%ld\n"),
 					pid->kP(),
 					pid->kI(),
 					pid->kD(),
@@ -494,28 +526,28 @@ print_PID(PID * pid)
 static void
 print_radio_values()
 {
-	Serial.printf_P(PSTR("CH1: %d | %d | %d\n"), (int)g.channel_roll.radio_min, (int)g.channel_roll.radio_trim, (int)g.channel_roll.radio_max);
-	Serial.printf_P(PSTR("CH2: %d | %d | %d\n"), (int)g.channel_pitch.radio_min, (int)g.channel_pitch.radio_trim, (int)g.channel_pitch.radio_max);
-	Serial.printf_P(PSTR("CH3: %d | %d | %d\n"), (int)g.channel_throttle.radio_min, (int)g.channel_throttle.radio_trim, (int)g.channel_throttle.radio_max);
-	Serial.printf_P(PSTR("CH4: %d | %d | %d\n"), (int)g.channel_rudder.radio_min, (int)g.channel_rudder.radio_trim, (int)g.channel_rudder.radio_max);
-	Serial.printf_P(PSTR("CH5: %d | %d | %d\n"), (int)g.rc_5.radio_min, (int)g.rc_5.radio_trim, (int)g.rc_5.radio_max);
-	Serial.printf_P(PSTR("CH6: %d | %d | %d\n"), (int)g.rc_6.radio_min, (int)g.rc_6.radio_trim, (int)g.rc_6.radio_max);
-	Serial.printf_P(PSTR("CH7: %d | %d | %d\n"), (int)g.rc_7.radio_min, (int)g.rc_7.radio_trim, (int)g.rc_7.radio_max);
-	Serial.printf_P(PSTR("CH8: %d | %d | %d\n"), (int)g.rc_8.radio_min, (int)g.rc_8.radio_trim, (int)g.rc_8.radio_max);
+	cliSerial->printf_P(PSTR("CH1: %d | %d | %d\n"), (int)g.channel_roll.radio_min, (int)g.channel_roll.radio_trim, (int)g.channel_roll.radio_max);
+	cliSerial->printf_P(PSTR("CH2: %d | %d | %d\n"), (int)g.channel_pitch.radio_min, (int)g.channel_pitch.radio_trim, (int)g.channel_pitch.radio_max);
+	cliSerial->printf_P(PSTR("CH3: %d | %d | %d\n"), (int)g.channel_throttle.radio_min, (int)g.channel_throttle.radio_trim, (int)g.channel_throttle.radio_max);
+	cliSerial->printf_P(PSTR("CH4: %d | %d | %d\n"), (int)g.channel_rudder.radio_min, (int)g.channel_rudder.radio_trim, (int)g.channel_rudder.radio_max);
+	cliSerial->printf_P(PSTR("CH5: %d | %d | %d\n"), (int)g.rc_5.radio_min, (int)g.rc_5.radio_trim, (int)g.rc_5.radio_max);
+	cliSerial->printf_P(PSTR("CH6: %d | %d | %d\n"), (int)g.rc_6.radio_min, (int)g.rc_6.radio_trim, (int)g.rc_6.radio_max);
+	cliSerial->printf_P(PSTR("CH7: %d | %d | %d\n"), (int)g.rc_7.radio_min, (int)g.rc_7.radio_trim, (int)g.rc_7.radio_max);
+	cliSerial->printf_P(PSTR("CH8: %d | %d | %d\n"), (int)g.rc_8.radio_min, (int)g.rc_8.radio_trim, (int)g.rc_8.radio_max);
 
 }
 
 static void
 print_switch(byte p, byte m)
 {
-	Serial.printf_P(PSTR("Pos %d: "),p);
-	Serial.println(flight_mode_strings[m]);
+	cliSerial->printf_P(PSTR("Pos %d: "),p);
+    print_flight_mode(m);
 }
 
 static void
 print_done()
 {
-	Serial.printf_P(PSTR("\nSaved Settings\n\n"));
+	cliSerial->printf_P(PSTR("\nSaved Settings\n\n"));
 }
 
 static void
@@ -523,7 +555,7 @@ print_blanks(int num)
 {
 	while(num > 0){
 		num--;
-		Serial.println("");
+		cliSerial->println("");
 	}
 }
 
@@ -531,9 +563,9 @@ static void
 print_divider(void)
 {
 	for (int i = 0; i < 40; i++) {
-		Serial.printf_P(PSTR("-"));
+		cliSerial->printf_P(PSTR("-"));
 	}
-	Serial.println("");
+	cliSerial->println("");
 }
 
 static int8_t
@@ -566,39 +598,34 @@ radio_input_switch(void)
 static void zero_eeprom(void)
 {
 	byte b = 0;
-	Serial.printf_P(PSTR("\nErasing EEPROM\n"));
-	for (int i = 0; i < EEPROM_MAX_ADDR; i++) {
+	cliSerial->printf_P(PSTR("\nErasing EEPROM\n"));
+	for (intptr_t i = 0; i < EEPROM_MAX_ADDR; i++) {
 		eeprom_write_byte((uint8_t *) i, b);
 	}
-	Serial.printf_P(PSTR("done\n"));
+	cliSerial->printf_P(PSTR("done\n"));
 }
 
 static void print_enabled(bool b)
 {
 	if(b)
-		Serial.printf_P(PSTR("en"));
+		cliSerial->printf_P(PSTR("en"));
 	else
-		Serial.printf_P(PSTR("dis"));
-	Serial.printf_P(PSTR("abled\n"));
+		cliSerial->printf_P(PSTR("dis"));
+	cliSerial->printf_P(PSTR("abled\n"));
 }
 
 static void
-print_accel_offsets(void)
+print_accel_offsets_and_scaling(void)
 {
-	Serial.printf_P(PSTR("Accel offsets: %4.2f, %4.2f, %4.2f\n"),
-						(float)imu.ax(),
-						(float)imu.ay(),
-						(float)imu.az());
+    Vector3f accel_offsets = ins.get_accel_offsets();
+    Vector3f accel_scale = ins.get_accel_scale();
+    cliSerial->printf_P(PSTR("Accel offsets: %4.2f, %4.2f, %4.2f\tscale: %4.2f, %4.2f, %4.2f\n"),
+                    (float)accel_offsets.x,                           // Pitch
+                    (float)accel_offsets.y,                           // Roll
+                    (float)accel_offsets.z,                           // YAW
+                    (float)accel_scale.x,                             // Pitch
+                    (float)accel_scale.y,                             // Roll
+                    (float)accel_scale.z);                            // YAW
 }
-
-static void
-print_gyro_offsets(void)
-{
-	Serial.printf_P(PSTR("Gyro offsets: %4.2f, %4.2f, %4.2f\n"),
-						(float)imu.gx(),
-						(float)imu.gy(),
-						(float)imu.gz());
-}
-
 
 #endif // CLI_ENABLED

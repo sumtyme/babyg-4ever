@@ -16,25 +16,20 @@ public:
     AP_InertialSensor_Stub() {
     }
 
-    uint16_t        init( AP_PeriodicProcess * scheduler );
-
     /* Concrete implementation of AP_InertialSensor functions: */
     bool            update();
     bool            new_data_available();
-    float           gx();
-    float           gy();
-    float           gz();
-    void            get_gyros( float * );
-    float           ax();
-    float           ay();
-    float           az();
-    void            get_accels( float * );
-    void            get_sensors( float * );
     float           temperature();
-    uint32_t        sample_time();
-    void            reset_sample_time();
+    uint32_t        get_delta_time_micros();
+    uint32_t        get_last_sample_time_micros();
     float           get_gyro_drift_rate();
     uint16_t        num_samples_available();
+
+protected:
+    uint16_t        _init_sensor( AP_PeriodicProcess * scheduler, Sample_rate sample_rate );
+    uint32_t        _sample_period_ms;
+    uint32_t        _last_update_ms;
+    uint32_t        _delta_time_usec;
 };
 
 #endif // __AP_INERTIAL_SENSOR_STUB_H__

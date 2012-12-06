@@ -14,6 +14,7 @@
             this.goHereToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.flyToHereAltToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.pointCameraHereToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.triggerCameraToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.flightPlannerToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.MainH = new System.Windows.Forms.SplitContainer();
             this.SubMainLeft = new System.Windows.Forms.SplitContainer();
@@ -23,7 +24,6 @@
             this.stopRecordToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.setMJPEGSourceToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.setAspectRatioToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
-            this.displayBatteryInfoToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.userItemsToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.bindingSource1 = new System.Windows.Forms.BindingSource(this.components);
             this.tabControl1 = new System.Windows.Forms.TabControl();
@@ -35,6 +35,7 @@
             this.quickView2 = new ArdupilotMega.Controls.QuickView();
             this.quickView1 = new ArdupilotMega.Controls.QuickView();
             this.tabActions = new System.Windows.Forms.TabPage();
+            this.modifyandSetSpeed = new ArdupilotMega.Controls.ModifyandSet();
             this.modifyandSetAlt = new ArdupilotMega.Controls.ModifyandSet();
             this.BUT_ARM = new ArdupilotMega.Controls.MyButton();
             this.BUT_script = new ArdupilotMega.Controls.MyButton();
@@ -69,11 +70,12 @@
             this.tableMap = new System.Windows.Forms.TableLayoutPanel();
             this.splitContainer1 = new System.Windows.Forms.SplitContainer();
             this.zg1 = new ZedGraph.ZedGraphControl();
+            this.gMapControl1 = new ArdupilotMega.Controls.myGMAP();
+            this.TRK_zoom = new ArdupilotMega.Controls.MyTrackBar();
             this.lbl_winddir = new ArdupilotMega.Controls.MyLabel();
             this.lbl_windvel = new ArdupilotMega.Controls.MyLabel();
             this.lbl_hdop = new ArdupilotMega.Controls.MyLabel();
             this.lbl_sats = new ArdupilotMega.Controls.MyLabel();
-            this.gMapControl1 = new ArdupilotMega.Controls.myGMAP();
             this.panel1 = new System.Windows.Forms.Panel();
             this.TXT_lat = new ArdupilotMega.Controls.MyLabel();
             this.Zoomlevel = new System.Windows.Forms.NumericUpDown();
@@ -86,9 +88,6 @@
             this.dataGridViewImageColumn2 = new System.Windows.Forms.DataGridViewImageColumn();
             this.ZedGraphTimer = new System.Windows.Forms.Timer(this.components);
             this.toolTip1 = new System.Windows.Forms.ToolTip(this.components);
-            this.dockContainer1 = new Crom.Controls.Docking.DockContainer();
-            this.contextMenuStripDockContainer = new System.Windows.Forms.ContextMenuStrip(this.components);
-            this.resetToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.contextMenuStripMap.SuspendLayout();
             this.MainH.Panel1.SuspendLayout();
             this.MainH.Panel2.SuspendLayout();
@@ -109,9 +108,9 @@
             this.splitContainer1.Panel1.SuspendLayout();
             this.splitContainer1.Panel2.SuspendLayout();
             this.splitContainer1.SuspendLayout();
+            ((System.ComponentModel.ISupportInitialize)(this.TRK_zoom)).BeginInit();
             this.panel1.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)(this.Zoomlevel)).BeginInit();
-            this.contextMenuStripDockContainer.SuspendLayout();
             this.SuspendLayout();
             // 
             // contextMenuStripMap
@@ -120,6 +119,7 @@
             this.goHereToolStripMenuItem,
             this.flyToHereAltToolStripMenuItem,
             this.pointCameraHereToolStripMenuItem,
+            this.triggerCameraToolStripMenuItem,
             this.flightPlannerToolStripMenuItem});
             this.contextMenuStripMap.Name = "contextMenuStrip1";
             resources.ApplyResources(this.contextMenuStripMap, "contextMenuStripMap");
@@ -142,6 +142,12 @@
             resources.ApplyResources(this.pointCameraHereToolStripMenuItem, "pointCameraHereToolStripMenuItem");
             this.pointCameraHereToolStripMenuItem.Click += new System.EventHandler(this.pointCameraHereToolStripMenuItem_Click);
             // 
+            // triggerCameraToolStripMenuItem
+            // 
+            this.triggerCameraToolStripMenuItem.Name = "triggerCameraToolStripMenuItem";
+            resources.ApplyResources(this.triggerCameraToolStripMenuItem, "triggerCameraToolStripMenuItem");
+            this.triggerCameraToolStripMenuItem.Click += new System.EventHandler(this.triggerCameraToolStripMenuItem_Click);
+            // 
             // flightPlannerToolStripMenuItem
             // 
             this.flightPlannerToolStripMenuItem.Name = "flightPlannerToolStripMenuItem";
@@ -152,6 +158,7 @@
             // 
             this.MainH.BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle;
             resources.ApplyResources(this.MainH, "MainH");
+            this.MainH.FixedPanel = System.Windows.Forms.FixedPanel.Panel1;
             this.MainH.Name = "MainH";
             // 
             // MainH.Panel1
@@ -174,7 +181,6 @@
             // 
             // SubMainLeft.Panel2
             // 
-            this.SubMainLeft.Panel2.BackColor = System.Drawing.Color.Transparent;
             this.SubMainLeft.Panel2.Controls.Add(this.tabControl1);
             // 
             // hud1
@@ -251,7 +257,6 @@
             this.stopRecordToolStripMenuItem,
             this.setMJPEGSourceToolStripMenuItem,
             this.setAspectRatioToolStripMenuItem,
-            this.displayBatteryInfoToolStripMenuItem,
             this.userItemsToolStripMenuItem});
             this.contextMenuStripHud.Name = "contextMenuStrip2";
             resources.ApplyResources(this.contextMenuStripHud, "contextMenuStripHud");
@@ -279,12 +284,6 @@
             this.setAspectRatioToolStripMenuItem.Name = "setAspectRatioToolStripMenuItem";
             resources.ApplyResources(this.setAspectRatioToolStripMenuItem, "setAspectRatioToolStripMenuItem");
             this.setAspectRatioToolStripMenuItem.Click += new System.EventHandler(this.setAspectRatioToolStripMenuItem_Click);
-            // 
-            // displayBatteryInfoToolStripMenuItem
-            // 
-            this.displayBatteryInfoToolStripMenuItem.Name = "displayBatteryInfoToolStripMenuItem";
-            resources.ApplyResources(this.displayBatteryInfoToolStripMenuItem, "displayBatteryInfoToolStripMenuItem");
-            this.displayBatteryInfoToolStripMenuItem.Click += new System.EventHandler(this.displayBatteryInfoToolStripMenuItem_Click);
             // 
             // userItemsToolStripMenuItem
             // 
@@ -391,6 +390,7 @@
             // 
             // tabActions
             // 
+            this.tabActions.Controls.Add(this.modifyandSetSpeed);
             this.tabActions.Controls.Add(this.modifyandSetAlt);
             this.tabActions.Controls.Add(this.BUT_ARM);
             this.tabActions.Controls.Add(this.BUT_script);
@@ -411,6 +411,19 @@
             resources.ApplyResources(this.tabActions, "tabActions");
             this.tabActions.Name = "tabActions";
             this.tabActions.UseVisualStyleBackColor = true;
+            // 
+            // modifyandSetSpeed
+            // 
+            this.modifyandSetSpeed.ButtonText = "Change Speed";
+            resources.ApplyResources(this.modifyandSetSpeed, "modifyandSetSpeed");
+            this.modifyandSetSpeed.Name = "modifyandSetSpeed";
+            this.modifyandSetSpeed.Value = new decimal(new int[] {
+            100,
+            0,
+            0,
+            0});
+            this.modifyandSetSpeed.Click += new System.EventHandler(this.modifyandSetSpeed_Click);
+            this.modifyandSetSpeed.ParentChanged += new System.EventHandler(this.modifyandSetSpeed_ParentChanged);
             // 
             // modifyandSetAlt
             // 
@@ -1016,7 +1029,6 @@
             // 
             resources.ApplyResources(this.tabStatus, "tabStatus");
             this.tabStatus.Name = "tabStatus";
-            this.tabStatus.UseVisualStyleBackColor = true;
             // 
             // tabTLogs
             // 
@@ -1066,7 +1078,6 @@
             // tracklog
             // 
             resources.ApplyResources(this.tracklog, "tracklog");
-            this.tracklog.BackColor = System.Drawing.SystemColors.Control;
             this.tracklog.Maximum = 100;
             this.tracklog.Name = "tracklog";
             this.tracklog.Scroll += new System.EventHandler(this.tracklog_Scroll);
@@ -1105,11 +1116,12 @@
             // splitContainer1.Panel2
             // 
             this.splitContainer1.Panel2.ContextMenuStrip = this.contextMenuStripMap;
+            this.splitContainer1.Panel2.Controls.Add(this.gMapControl1);
+            this.splitContainer1.Panel2.Controls.Add(this.TRK_zoom);
             this.splitContainer1.Panel2.Controls.Add(this.lbl_winddir);
             this.splitContainer1.Panel2.Controls.Add(this.lbl_windvel);
             this.splitContainer1.Panel2.Controls.Add(this.lbl_hdop);
             this.splitContainer1.Panel2.Controls.Add(this.lbl_sats);
-            this.splitContainer1.Panel2.Controls.Add(this.gMapControl1);
             // 
             // zg1
             // 
@@ -1123,6 +1135,44 @@
             this.zg1.ScrollMinY = 0D;
             this.zg1.ScrollMinY2 = 0D;
             this.zg1.DoubleClick += new System.EventHandler(this.zg1_DoubleClick);
+            // 
+            // gMapControl1
+            // 
+            this.gMapControl1.Bearing = 0F;
+            this.gMapControl1.CanDragMap = true;
+            this.gMapControl1.ContextMenuStrip = this.contextMenuStripMap;
+            resources.ApplyResources(this.gMapControl1, "gMapControl1");
+            this.gMapControl1.GrayScaleMode = false;
+            this.gMapControl1.LevelsKeepInMemmory = 5;
+            this.gMapControl1.MarkersEnabled = true;
+            this.gMapControl1.MaxZoom = 2;
+            this.gMapControl1.MinZoom = 2;
+            this.gMapControl1.MouseWheelZoomType = GMap.NET.MouseWheelZoomType.MousePositionAndCenter;
+            this.gMapControl1.Name = "gMapControl1";
+            this.gMapControl1.NegativeMode = false;
+            this.gMapControl1.PolygonsEnabled = true;
+            this.gMapControl1.RetryLoadTile = 0;
+            this.gMapControl1.RoutesEnabled = true;
+            this.gMapControl1.ShowTileGridLines = false;
+            this.gMapControl1.streamjpg = ((System.IO.MemoryStream)(resources.GetObject("gMapControl1.streamjpg")));
+            this.gMapControl1.Zoom = 0D;
+            this.gMapControl1.Click += new System.EventHandler(this.gMapControl1_Click);
+            this.gMapControl1.MouseDown += new System.Windows.Forms.MouseEventHandler(this.gMapControl1_MouseDown);
+            this.gMapControl1.MouseLeave += new System.EventHandler(this.gMapControl1_MouseLeave);
+            this.gMapControl1.MouseMove += new System.Windows.Forms.MouseEventHandler(this.gMapControl1_MouseMove);
+            // 
+            // TRK_zoom
+            // 
+            resources.ApplyResources(this.TRK_zoom, "TRK_zoom");
+            this.TRK_zoom.LargeChange = 100;
+            this.TRK_zoom.Maximum = 18D;
+            this.TRK_zoom.Minimum = 1D;
+            this.TRK_zoom.Name = "TRK_zoom";
+            this.TRK_zoom.SmallChange = 50;
+            this.TRK_zoom.TickFrequency = 100;
+            this.TRK_zoom.TickStyle = System.Windows.Forms.TickStyle.Both;
+            this.TRK_zoom.Value = 10D;
+            this.TRK_zoom.Scroll += new System.EventHandler(this.TRK_zoom_Scroll);
             // 
             // lbl_winddir
             // 
@@ -1155,31 +1205,6 @@
             this.lbl_sats.Name = "lbl_sats";
             this.lbl_sats.resize = true;
             this.toolTip1.SetToolTip(this.lbl_sats, resources.GetString("lbl_sats.ToolTip"));
-            // 
-            // gMapControl1
-            // 
-            this.gMapControl1.BackColor = System.Drawing.Color.Transparent;
-            this.gMapControl1.Bearing = 0F;
-            this.gMapControl1.CanDragMap = true;
-            this.gMapControl1.ContextMenuStrip = this.contextMenuStripMap;
-            resources.ApplyResources(this.gMapControl1, "gMapControl1");
-            this.gMapControl1.GrayScaleMode = false;
-            this.gMapControl1.LevelsKeepInMemmory = 5;
-            this.gMapControl1.MarkersEnabled = true;
-            this.gMapControl1.MaxZoom = 2;
-            this.gMapControl1.MinZoom = 2;
-            this.gMapControl1.MouseWheelZoomType = GMap.NET.MouseWheelZoomType.MousePositionAndCenter;
-            this.gMapControl1.Name = "gMapControl1";
-            this.gMapControl1.NegativeMode = false;
-            this.gMapControl1.PolygonsEnabled = true;
-            this.gMapControl1.RetryLoadTile = 0;
-            this.gMapControl1.RoutesEnabled = true;
-            this.gMapControl1.ShowTileGridLines = false;
-            this.gMapControl1.streamjpg = ((System.IO.MemoryStream)(resources.GetObject("gMapControl1.streamjpg")));
-            this.gMapControl1.Zoom = 0D;
-            this.gMapControl1.Click += new System.EventHandler(this.gMapControl1_Click);
-            this.gMapControl1.MouseDown += new System.Windows.Forms.MouseEventHandler(this.gMapControl1_MouseDown);
-            this.gMapControl1.MouseMove += new System.Windows.Forms.MouseEventHandler(this.gMapControl1_MouseMove);
             // 
             // panel1
             // 
@@ -1293,38 +1318,11 @@
             this.toolTip1.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(205)))), ((int)(((byte)(226)))), ((int)(((byte)(150)))));
             this.toolTip1.ForeColor = System.Drawing.Color.FromArgb(((int)(((byte)(121)))), ((int)(((byte)(148)))), ((int)(((byte)(41)))));
             // 
-            // dockContainer1
-            // 
-            this.dockContainer1.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(118)))), ((int)(((byte)(118)))), ((int)(((byte)(118)))));
-            this.dockContainer1.CanMoveByMouseFilledForms = true;
-            this.dockContainer1.ContextMenuStrip = this.contextMenuStripDockContainer;
-            resources.ApplyResources(this.dockContainer1, "dockContainer1");
-            this.dockContainer1.Name = "dockContainer1";
-            this.dockContainer1.TitleBarGradientColor1 = System.Drawing.Color.FromArgb(((int)(((byte)(148)))), ((int)(((byte)(193)))), ((int)(((byte)(31)))));
-            this.dockContainer1.TitleBarGradientColor2 = System.Drawing.Color.FromArgb(((int)(((byte)(205)))), ((int)(((byte)(226)))), ((int)(((byte)(150)))));
-            this.dockContainer1.TitleBarGradientSelectedColor1 = System.Drawing.Color.DarkGray;
-            this.dockContainer1.TitleBarGradientSelectedColor2 = System.Drawing.Color.White;
-            this.dockContainer1.TitleBarTextColor = System.Drawing.Color.FromArgb(((int)(((byte)(64)))), ((int)(((byte)(87)))), ((int)(((byte)(4)))));
-            // 
-            // contextMenuStripDockContainer
-            // 
-            this.contextMenuStripDockContainer.Items.AddRange(new System.Windows.Forms.ToolStripItem[] {
-            this.resetToolStripMenuItem});
-            this.contextMenuStripDockContainer.Name = "contextMenuStripDockContainer";
-            resources.ApplyResources(this.contextMenuStripDockContainer, "contextMenuStripDockContainer");
-            // 
-            // resetToolStripMenuItem
-            // 
-            this.resetToolStripMenuItem.Name = "resetToolStripMenuItem";
-            resources.ApplyResources(this.resetToolStripMenuItem, "resetToolStripMenuItem");
-            this.resetToolStripMenuItem.Click += new System.EventHandler(this.resetToolStripMenuItem_Click);
-            // 
             // FlightData
             // 
             resources.ApplyResources(this, "$this");
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.Controls.Add(this.MainH);
-            this.Controls.Add(this.dockContainer1);
             this.MinimumSize = new System.Drawing.Size(1008, 461);
             this.Name = "FlightData";
             this.FormClosing += new System.Windows.Forms.FormClosingEventHandler(this.FlightData_FormClosing);
@@ -1351,11 +1349,12 @@
             this.tableMap.ResumeLayout(false);
             this.splitContainer1.Panel1.ResumeLayout(false);
             this.splitContainer1.Panel2.ResumeLayout(false);
+            this.splitContainer1.Panel2.PerformLayout();
             this.splitContainer1.ResumeLayout(false);
+            ((System.ComponentModel.ISupportInitialize)(this.TRK_zoom)).EndInit();
             this.panel1.ResumeLayout(false);
             this.panel1.PerformLayout();
             ((System.ComponentModel.ISupportInitialize)(this.Zoomlevel)).EndInit();
-            this.contextMenuStripDockContainer.ResumeLayout(false);
             this.ResumeLayout(false);
 
         }
@@ -1423,7 +1422,6 @@
         private Controls.MyLabel lbl_playbackspeed;
         private System.Windows.Forms.ToolStripMenuItem setMJPEGSourceToolStripMenuItem;
         private System.Windows.Forms.ToolStripMenuItem setAspectRatioToolStripMenuItem;
-        private System.Windows.Forms.ToolStripMenuItem displayBatteryInfoToolStripMenuItem;
         private System.Windows.Forms.TabPage tabQuick;
         private Controls.QuickView quickView3;
         private Controls.QuickView quickView2;
@@ -1434,11 +1432,12 @@
         private System.Windows.Forms.ToolStripMenuItem flyToHereAltToolStripMenuItem;
         private System.Windows.Forms.ToolStripMenuItem flightPlannerToolStripMenuItem;
         private System.Windows.Forms.ToolStripMenuItem userItemsToolStripMenuItem;
-        private Crom.Controls.Docking.DockContainer dockContainer1;
-        private System.Windows.Forms.ContextMenuStrip contextMenuStripDockContainer;
-        private System.Windows.Forms.ToolStripMenuItem resetToolStripMenuItem;
+        //private Crom.Controls.Docking.DockContainer dockContainer1;
         private Controls.MyButton BUT_ARM;
         private Controls.ModifyandSet modifyandSetAlt;
+        private Controls.ModifyandSet modifyandSetSpeed;
+        private System.Windows.Forms.ToolStripMenuItem triggerCameraToolStripMenuItem;
+        private Controls.MyTrackBar TRK_zoom;
 
     }
 }

@@ -16,8 +16,9 @@
 #define YAW_HOLD                        0
 #define YAW_ACRO                        1
 #define YAW_AUTO                        2
-#define YAW_LOOK_AT_HOME        3
+#define YAW_LOOK_AT_HOME    		    3
 #define YAW_TOY                         4       // THOR This is the Yaw mode
+#define YAW_LOOK_AHEAD					5		// WARNING!  CODE IN DEVELOPMENT NOT PROVEN
 
 
 #define ROLL_PITCH_STABLE       0
@@ -27,9 +28,15 @@
 #define ROLL_PITCH_TOY          4       // THOR This is the Roll and Pitch
                                         // mode
 
-#define THROTTLE_MANUAL         0
-#define THROTTLE_HOLD           1
-#define THROTTLE_AUTO           2
+#define THROTTLE_MANUAL                     0   // manual throttle mode - pilot input goes directly to motors
+#define THROTTLE_MANUAL_TILT_COMPENSATED    1   // mostly manual throttle but with some tilt compensation
+#define THROTTLE_ACCELERATION               2   // pilot inputs the desired acceleration
+#define THROTTLE_RATE                       3   // pilot inputs the desired climb rate.  Note: this uses the unstabilized rate controller
+#define THROTTLE_STABILIZED_RATE            4   // pilot inputs the desired climb rate.  Uses stabilized rate controller
+#define THROTTLE_DIRECT_ALT                 5   // pilot inputs a desired altitude from 0 ~ 10 meters
+#define THROTTLE_HOLD                       6   // alt hold plus pilot input of climb rate
+#define THROTTLE_AUTO                       7   // auto pilot altitude controller with target altitude held in next_WP.alt
+#define THROTTLE_LAND                       8   // landing throttle controller
 
 
 // active altitude sensor
@@ -67,7 +74,7 @@
 
 // LED output
 #define NORMAL_LEDS 0
-#define AUTO_TRIM_LEDS 1
+#define SAVE_TRIM_LEDS 1
 
 
 #define CH_7_PWM_TRIGGER 1800
@@ -111,13 +118,13 @@
 #define RC_CHANNEL_ANGLE_RAW 2
 
 // HIL enumerations
-#define HIL_MODE_DISABLED                       0
-#define HIL_MODE_ATTITUDE                       1
-#define HIL_MODE_SENSORS                        2
+#define HIL_MODE_DISABLED               0
+#define HIL_MODE_ATTITUDE               1
+#define HIL_MODE_SENSORS                2
 
-#define ASCENDING                       1
-#define DESCENDING                      -1
 #define REACHED_ALT                     0
+#define DESCENDING                      1
+#define ASCENDING                       2
 
 // Auto Pilot modes
 // ----------------
@@ -131,10 +138,10 @@
 #define CIRCLE 7                        // AUTO control
 #define POSITION 8                      // AUTO control
 #define LAND 9                          // AUTO control
-#define OF_LOITER 10            // Hold a single location using optical flow
-                                // sensor
-#define TOY_A 11                                // THOR Enum for Toy mode
-#define TOY_M 12                                // THOR Enum for Toy mode
+#define OF_LOITER 10                    // Hold a single location using optical flow
+                                        // sensor
+#define TOY_A 11                        // THOR Enum for Toy mode
+#define TOY_M 12                        // THOR Enum for Toy mode
 #define NUM_MODES 13
 
 #define SIMPLE_1 1
@@ -160,8 +167,12 @@
 #define CH6_RATE_KD 21
 #define CH6_YAW_RATE_KP 6
 #define CH6_YAW_RATE_KD 26
-// Altitude rate controller
+// Throttle
 #define CH6_THROTTLE_KP 7
+#define CH6_THROTTLE_KI 33
+#define CH6_THR_ACCEL_KP 34
+#define CH6_THR_ACCEL_KI 35
+#define CH6_THR_ACCEL_KD 36
 // Extras
 #define CH6_TOP_BOTTOM_RATIO 8
 #define CH6_RELAY 9
@@ -192,6 +203,8 @@
 #define CH6_AHRS_YAW_KP 30
 #define CH6_AHRS_KP             31
 
+// Inertial Nav
+#define CH6_INAV_TC     32
 
 // nav byte mask
 // -------------
@@ -207,12 +220,11 @@
 #define NO_COMMAND 0
 
 
+// Navigation modes held in wp_control variable
 #define LOITER_MODE 1
 #define WP_MODE 2
 #define CIRCLE_MODE 3
 #define NO_NAV_MODE 4
-#define TOY_MODE 5                      // THOR This mode defines the Virtual
-                                        // WP following mode
 
 // TOY mixing options
 #define TOY_LOOKUP_TABLE 0
@@ -223,12 +235,18 @@
 // Waypoint options
 #define MASK_OPTIONS_RELATIVE_ALT               1
 #define WP_OPTION_ALT_CHANGE                    2
-#define WP_OPTION_YAW                                   4
+#define WP_OPTION_YAW                           4
 #define WP_OPTION_ALT_REQUIRED                  8
-#define WP_OPTION_RELATIVE                              16
+#define WP_OPTION_RELATIVE                      16
 //#define WP_OPTION_					32
 //#define WP_OPTION_					64
-#define WP_OPTION_NEXT_CMD                              128
+#define WP_OPTION_NEXT_CMD                      128
+
+// RTL state
+#define RTL_STATE_RETURNING_HOME    0
+#define RTL_STATE_LOITERING_AT_HOME 1
+#define RTL_STATE_FINAL_DESCENT     2
+#define RTL_STATE_LAND              3
 
 //repeating events
 #define NO_REPEAT 0
@@ -297,11 +315,12 @@ enum gcs_severity {
 #define LOG_PID_MSG                     0x0E
 #define LOG_ITERM_MSG                   0x0F
 #define LOG_DMP_MSG                     0x10
+#define LOG_INAV_MSG                    0x11
 #define LOG_INDEX_MSG                   0xF0
 #define MAX_NUM_LOGS                    50
 
-#define MASK_LOG_ATTITUDE_FAST  (1<<0)
-#define MASK_LOG_ATTITUDE_MED   (1<<1)
+#define MASK_LOG_ATTITUDE_FAST          (1<<0)
+#define MASK_LOG_ATTITUDE_MED           (1<<1)
 #define MASK_LOG_GPS                    (1<<2)
 #define MASK_LOG_PM                     (1<<3)
 #define MASK_LOG_CTUN                   (1<<4)
@@ -314,6 +333,53 @@ enum gcs_severity {
 #define MASK_LOG_OPTFLOW                (1<<11)
 #define MASK_LOG_PID                    (1<<12)
 #define MASK_LOG_ITERM                  (1<<13)
+#define MASK_LOG_INAV                   (1<<14)
+
+
+#define MASK_LOG_CTUN                   (1<<4)
+#define MASK_LOG_NTUN                   (1<<5)
+#define MASK_LOG_MODE                   (1<<6)
+#define MASK_LOG_RAW                    (1<<7)
+#define MASK_LOG_CMD                    (1<<8)
+#define MASK_LOG_CUR                    (1<<9)
+#define MASK_LOG_MOTORS                 (1<<10)
+#define MASK_LOG_OPTFLOW                (1<<11)
+#define MASK_LOG_PID                    (1<<12)
+#define MASK_LOG_ITERM                  (1<<13)
+
+
+// DATA - event logging
+#define DATA_MAVLINK_FLOAT              1
+#define DATA_MAVLINK_INT32              2
+#define DATA_MAVLINK_INT16              3
+#define DATA_MAVLINK_INT8               4
+#define DATA_FAST_LOOP                  5
+#define DATA_MED_LOOP                   6
+#define DATA_AP_STATE                   7
+#define DATA_SIMPLE_BEARING             8
+#define DATA_INIT_SIMPLE_BEARING        9
+#define DATA_ARMED                      10
+#define DATA_DISARMED                   11
+#define DATA_FAILSAFE_ON                12
+#define DATA_FAILSAFE_OFF               13
+#define DATA_LOW_BATTERY                14
+#define DATA_AUTO_ARMED                 15
+#define DATA_TAKEOFF                    16
+#define DATA_DID_REACH_ALT              17
+#define DATA_LAND_COMPLETE              18
+#define DATA_LOST_GPS                   19
+#define DATA_LOST_COMPASS               20
+#define DATA_BEGIN_FLIP                 21
+#define DATA_END_FLIP                   22
+#define DATA_EXIT_FLIP                  23
+#define DATA_FLIP_ABORTED               24
+#define DATA_SET_HOME                   25
+#define DATA_SET_SIMPLE_ON              26
+#define DATA_SET_SIMPLE_OFF             27
+#define DATA_REACHED_ALT                28
+#define DATA_ASCENDING                  29
+#define DATA_DESCENDING                 30
+#define DATA_RTL_REACHED_ALT            31
 
 
 // Waypoint Modes
@@ -403,10 +469,8 @@ enum gcs_severity {
                             // WP
 #define WP_SIZE 15
 
-#define ONBOARD_PARAM_NAME_LENGTH 15
-
 // fence points are stored at the end of the EEPROM
-#define MAX_FENCEPOINTS 20
+#define MAX_FENCEPOINTS 6
 #define FENCE_WP_SIZE sizeof(Vector2l)
 #define FENCE_START_BYTE (EEPROM_MAX_ADDR-(MAX_FENCEPOINTS*FENCE_WP_SIZE))
 

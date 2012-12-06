@@ -692,6 +692,9 @@ namespace ArdupilotMega
 
                     byte[] packet = MavlinkInterface.readPacket();
 
+                    if (packet.Length > 5 && packet[3] == 0xff)
+                        continue;
+
                     cs.datetime = MavlinkInterface.lastlogread;
 
                     cs.UpdateCurrentSettings(null, true, MavlinkInterface);
@@ -766,17 +769,34 @@ namespace ArdupilotMega
                             {
                                 list.Add(time, (byte)field.GetValue(data));
                             }
+                            else if (value.GetType() == typeof(sbyte))
+                            {
+                                list.Add(time, (sbyte)field.GetValue(data));
+                            }
                             else if (value.GetType() == typeof(Int32))
                             {
                                 list.Add(time, (Int32)field.GetValue(data));
+                            }
+                            else if (value.GetType() == typeof(UInt32))
+                            {
+                                list.Add(time, (UInt32)field.GetValue(data));
                             }
                             else if (value.GetType() == typeof(ulong))
                             {
                                 list.Add(time, (ulong)field.GetValue(data));
                             }
+                            else if (value.GetType() == typeof(long))
+                            {
+                                list.Add(time, (long)field.GetValue(data));
+                            }
+                            else if (value.GetType() == typeof(double))
+                            {
+                                list.Add(time, (double)field.GetValue(data));
+                            }
+
                             else
                             {
-
+                                Console.WriteLine("Unknown data type");
                             }
                         }
                     }
@@ -1269,19 +1289,20 @@ namespace ArdupilotMega
 
                 foreach (string logfile in openFileDialog1.FileNames)
                 {
-
-                    MAVLink mine = new MAVLink();
                     try
                     {
-                        mine.logplaybackfile = new BinaryReader(File.Open(logfile, FileMode.Open, FileAccess.Read, FileShare.Read));
-                    }
-                    catch (Exception ex) { log.Debug(ex.ToString()); CustomMessageBox.Show("Log Can not be opened. Are you still connected?"); return; }
+                        MAVLink mine = new MAVLink();
+                        try
+                        {
+                            mine.logplaybackfile = new BinaryReader(File.Open(logfile, FileMode.Open, FileAccess.Read, FileShare.Read));
+                        }
+                        catch (Exception ex) { log.Debug(ex.ToString()); CustomMessageBox.Show("Log Can not be opened. Are you still connected?"); return; }
 
-                    mine.logreadmode = true;
+                        mine.logreadmode = true;
 
-                    mine.packets.Initialize(); // clear
+                        mine.packets.Initialize(); // clear
 
-                    StreamWriter sw = new StreamWriter(Path.GetDirectoryName(logfile) + Path.DirectorySeparatorChar + Path.GetFileNameWithoutExtension(logfile) + ".param");
+                        StreamWriter sw = new StreamWriter(Path.GetDirectoryName(logfile) + Path.DirectorySeparatorChar + Path.GetFileNameWithoutExtension(logfile) + ".param");
 
                         // bar moves to 100 % in this step
                         progressBar1.Value = (int)((float)mine.logplaybackfile.BaseStream.Position / (float)mine.logplaybackfile.BaseStream.Length * 100.0f / 1.0f);
@@ -1296,15 +1317,17 @@ namespace ArdupilotMega
                             sw.WriteLine(item + "\t" + mine.param[item]);
                         }
 
-                    sw.Close();
+                        sw.Close();
 
-                    progressBar1.Value = 100;
+                        progressBar1.Value = 100;
 
-                    mine.logreadmode = false;
-                    mine.logplaybackfile.Close();
-                    mine.logplaybackfile = null;
+                        mine.logreadmode = false;
+                        mine.logplaybackfile.Close();
+                        mine.logplaybackfile = null;
 
-                    CustomMessageBox.Show("File Saved with log file");
+                        CustomMessageBox.Show("File Saved with log file");
+                    }
+                    catch { CustomMessageBox.Show("Error Extracting params"); }
                 }
             }
         }

@@ -12,7 +12,6 @@
 #define ToDeg(x) (x*57.2957795131)	// *180/pi
 
 #define DEBUG 0
-#define LOITER_RANGE 60 // for calculating power outside of loiter radius
 #define SERVO_MAX 4500	// This value represents 45 degrees and is just an arbitrary representation of servo max travel.
 
 // failsafe
@@ -36,32 +35,7 @@
 // CH 7 control
 #define CH7_DO_NOTHING   0
 #define CH7_SAVE_WP      1
-#define CH7_LEO          2
-#define CH7_THERMAL      3
-#define CH7_SARSEC       4
-#define CH7_SARGRID      5
 #define CH7_RTL          6
-#define CH7_TUNING       7
-
-// CH_7 Tuning
-// -----------
-#define TUN_NONE           0
-// Attitude
-#define TUN_STABILIZE_KP   1
-#define TUN_STABILIZE_KI   2
-#define TUN_STABILIZE_KD   3
-#define TUN_YAW_KP         4
-#define TUN_YAW_KI         5
-#define TUN_YAW_KD         6
-#define TUN_STABROLL_KP    7
-#define TUN_STABROLL_KI    8
-#define TUN_STABROLL_KD    9
-#define TUN_STABPITCH_KP   10
-#define TUN_STABPITCH_KI   11
-#define TUN_STABPITCH_KD   12
-
-#define PITOT_SOURCE_ADC 1
-#define PITOT_SOURCE_ANALOG_PIN 2
 
 #define T6 1000000
 #define T7 10000000
@@ -96,19 +70,11 @@
 #define CIRCLE 1			 // When flying sans GPS, and we loose the radio, just circle
 #define LEARNING 2
 
-#define FLY_BY_WIRE_A 5		// Fly By Wire A has left stick horizontal => desired roll angle, left stick vertical => desired pitch angle, right stick vertical = manual throttle
-#define FLY_BY_WIRE_B 6		// Fly By Wire B has left stick horizontal => desired roll angle, left stick vertical => desired pitch angle, right stick vertical => desired airspeed
-#define FLY_BY_WIRE_C 7		// Fly By Wire C has left stick horizontal => desired roll angle, left stick vertical => desired climb rate, right stick vertical => desired airspeed
-							// Fly By Wire B and Fly By Wire C require airspeed sensor
 #define AUTO 10
 #define RTL 11
-#define LOITER 12
-//#define TAKEOFF 13			// This is not used by APM.  It appears here for consistency with ACM
-//#define LAND 14			// This is not used by APM.  It appears here for consistency with ACM
 #define GUIDED 15
 #define INITIALISING 16     // in startup routines
 #define HEADALT      17   // Lock the current heading and altitude
-#define LAND         21   // Landing mode
 
 // Commands - Note that APM now uses a subset of the MAVLink protocol commands.  See enum MAV_CMD in the GCS_Mavlink library
 #define CMD_BLANK 0 // there is no command stored in the mem location requested
@@ -147,7 +113,6 @@ enum ap_message {
     MSG_RADIO_OUT,
     MSG_RADIO_IN,
     MSG_RAW_IMU1,
-    MSG_RAW_IMU2,
     MSG_RAW_IMU3,
     MSG_GPS_STATUS,
     MSG_GPS_RAW,
@@ -155,7 +120,6 @@ enum ap_message {
     MSG_NEXT_WAYPOINT,
     MSG_NEXT_PARAM,
     MSG_STATUSTEXT,
-    MSG_FENCE_STATUS,
     MSG_AHRS,
     MSG_SIMSTATE,
     MSG_HWSTATUS,
@@ -237,17 +201,10 @@ enum gcs_severity {
 // EEPROM addresses
 #define EEPROM_MAX_ADDR		4096
 // parameters get the first 1KiB of EEPROM, remainder is for waypoints
-#define WP_START_BYTE 0x400 // where in memory home WP is stored + all other WP
+#define WP_START_BYTE 0x500 // where in memory home WP is stored + all other WP
 #define WP_SIZE 15
 
-// fence points are stored at the end of the EEPROM
-#define MAX_FENCEPOINTS 20
-#define FENCE_WP_SIZE sizeof(Vector2l)
-#define FENCE_START_BYTE (EEPROM_MAX_ADDR-(MAX_FENCEPOINTS*FENCE_WP_SIZE))
-
-#define MAX_WAYPOINTS  ((FENCE_START_BYTE - WP_START_BYTE) / WP_SIZE) - 1 // - 1 to be safe
-
-#define ONBOARD_PARAM_NAME_LENGTH 15
+#define MAX_WAYPOINTS  ((EEPROM_MAX_ADDR - WP_START_BYTE) / WP_SIZE) - 1 // - 1 to be safe
 
 // convert a boolean (0 or 1) to a sign for multiplying (0 maps to 1, 1 maps to -1)
 #define BOOL_TO_SIGN(bvalue) ((bvalue)?-1:1)
@@ -255,8 +212,8 @@ enum gcs_severity {
 // mark a function as not to be inlined
 #define NOINLINE __attribute__((noinline))
 
-#define CONFIG_IMU_OILPAN 1
-#define CONFIG_IMU_MPU6000 2
+#define CONFIG_INS_OILPAN 1
+#define CONFIG_INS_MPU6000 2
 
 #define APM_HARDWARE_APM1  1
 #define APM_HARDWARE_APM2 2

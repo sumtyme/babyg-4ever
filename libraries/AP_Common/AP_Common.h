@@ -34,7 +34,6 @@ typedef struct {
 } prog_char_t;
 
 #include <stdint.h>
-#include "include/menu.h"               /// simple menu subsystem
 #include "c++.h" // c++ additions
 //#include "AP_Vector.h"
 //#include "AP_Loop.h"
@@ -94,8 +93,14 @@ typedef struct {
  #endif
 
  # undef PSTR
+  /* Need const type for progmem - new for avr-gcc 4.6 */
+  # if __AVR__ && __GNUC__ == 4 && __GNUC_MINOR__ > 5 
+ # define PSTR(s) (__extension__({static const prog_char __c[] PROGMEM = (s); \
+                                  (const prog_char_t *)&__c[0]; }))
+  #else
  # define PSTR(s) (__extension__({static prog_char __c[] PROGMEM = (s); \
                                   (prog_char_t *)&__c[0]; }))
+  #endif
 #endif
 
 // a varient of PSTR() for progmem strings passed to %S in printf()

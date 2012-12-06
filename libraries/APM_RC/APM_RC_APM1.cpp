@@ -27,7 +27,7 @@
  #include "WProgram.h"
 #endif
 
-#if !defined(__AVR_ATmega1280__) && !defined(__AVR_ATmega2560__)
+#if !defined(__AVR_ATmega1280__) && !defined(__AVR_ATmega2560__) && !defined(DESKTOP_BUILD)
  # error Please check the Tools/Board menu to ensure you have selected Arduino Mega as your target.
 #else
 
@@ -55,15 +55,16 @@ void APM_RC_APM1::_timer4_capt_cb(void)
     }
 
     if (Pulse_Width>8000) {                   // SYNC pulse?
+        // pass through values if at least a minimum number of channels received
+        if( PPM_Counter >= MIN_CHANNELS ) {
+            _radio_status = 1;
+            _last_update = millis();
+        }
         PPM_Counter=0;
     }
     else {
         if (PPM_Counter < NUM_CHANNELS) {     // Valid pulse channel?
             _PWM_RAW[PPM_Counter++]=Pulse_Width;   // Saving pulse.
-
-            if (PPM_Counter >= NUM_CHANNELS) {
-                _radio_status = 1;
-            }
         }
     }
     ICR4_old = Pulse;
@@ -218,10 +219,15 @@ uint16_t APM_RC_APM1::InputCh(uint8_t ch)
         return _HIL_override[ch];
     }
 
-    // we need to stop interrupts to be sure we get a correct 16 bit value
-    cli();
+    // We need to block ICP4 interrupts during the read of 16 bit PWM values
+    uint8_t _timsk4 = TIMSK4;
+    TIMSK4 &= ~(1<<ICIE4);
+
+    // value
     result = _PWM_RAW[ch];
-    sei();
+
+   // Enable ICP4 interrupt if previously active
+    TIMSK4 = _timsk4;
 
     // Because timer runs at 0.5us we need to do value/2
     result >>= 1;
@@ -311,6 +317,7 @@ bool APM_RC_APM1::setHIL(int16_t v[NUM_CHANNELS])
         }
     }
     _radio_status = 1;
+    _last_update = millis();
     if (sum == 0) {
         return 0;
     } else {

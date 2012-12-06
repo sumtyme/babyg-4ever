@@ -32,8 +32,8 @@ namespace ArdupilotMega
             InitializeComponent();
 
             // hide advanced view
-            SPLIT_local.Panel2Collapsed = true;
-            SPLIT_remote.Panel2Collapsed = true;
+            //SPLIT_local.Panel2Collapsed = true;
+            //SPLIT_remote.Panel2Collapsed = true;
 
             // setup netid
             S3.DataSource = Enumerable.Range(0, 500).ToArray();
@@ -666,46 +666,48 @@ namespace ArdupilotMega
 
         public bool doConnect(ArdupilotMega.Comms.ICommsSerial comPort)
         {
-            // clear buffer
-            comPort.DiscardInBuffer();
-            // setup a known enviroment
-            comPort.Write("\r\n");
-            // wait
-            Sleep(1100);
-            // send config string
-            comPort.Write("+++");
-            // wait
-            Sleep(1100);
-            // check for config responce "OK"
-            log.Info("Connect btr " + comPort.BytesToRead + " baud " + comPort.BaudRate);
-            string conn = comPort.ReadExisting();
-            log.Info("Connect first responce " + conn.Replace('\0', ' ') + " " + conn.Length);
-            if (conn.Contains("OK"))
+            try
             {
-                //return true;
-            }
-            else
-            {
-                // cleanup incase we are already in cmd mode
+                // clear buffer
+                comPort.DiscardInBuffer();
+                // setup a known enviroment
                 comPort.Write("\r\n");
+                // wait
+                Sleep(1100);
+                // send config string
+                comPort.Write("+++");
+                // wait
+                Sleep(1100);
+                // check for config responce "OK"
+                log.Info("Connect btr " + comPort.BytesToRead + " baud " + comPort.BaudRate);
+                string conn = comPort.ReadExisting();
+                log.Info("Connect first responce " + conn.Replace('\0', ' ') + " " + conn.Length);
+                if (conn.Contains("OK"))
+                {
+                    //return true;
+                }
+                else
+                {
+                    // cleanup incase we are already in cmd mode
+                    comPort.Write("\r\n");
+                }
+
+                doCommand(comPort, "AT&T");
+
+                string version = doCommand(comPort, "ATI");
+
+                log.Info("Connect Version: " + version.Trim() + "\n");
+
+                Regex regex = new Regex(@"SiK\s+(.*)\s+on\s+(.*)");
+
+                if (regex.IsMatch(version))
+                {
+                    return true;
+                }
+
+                return false;
             }
-
-
-
-            doCommand(comPort, "AT&T");
-
-            string version = doCommand(comPort, "ATI");
-
-            log.Info("Connect Version: " + version.Trim() + "\n");
-
-            Regex regex = new Regex(@"SiK\s+(.*)\s+on\s+(.*)");
-
-            if (regex.IsMatch(version))
-            {
-                return true;
-            }
-
-            return false;
+            catch { return false; }
         }
 
         private void BUT_Syncoptions_Click(object sender, EventArgs e)
@@ -731,6 +733,60 @@ green LED blinking - searching for another radio
 green LED solid - link is established with another radio 
 red LED flashing - transmitting data 
 red LED solid - in firmware update mode");
+        }
+
+        private void BUT_resettodefault_Click(object sender, EventArgs e)
+        {
+             ArdupilotMega.Comms.ICommsSerial comPort = new SerialPort();
+
+            try
+            {
+                comPort.PortName = MainV2.comPort.BaseStream.PortName;
+                comPort.BaudRate = MainV2.comPort.BaseStream.BaudRate;
+
+                comPort.ReadTimeout = 4000;
+
+                comPort.Open();
+
+
+            }
+            catch { CustomMessageBox.Show("Invalid ComPort or in use"); return; }
+
+            lbl_status.Text = "Connecting";
+
+            if (doConnect(comPort))
+            {
+                // cleanup
+                doCommand(comPort, "AT&T");
+
+                comPort.DiscardInBuffer();
+
+                lbl_status.Text = "Doing Command ATI & AT&F";
+
+                doCommand(comPort, "AT&F");
+
+                doCommand(comPort, "AT&W");
+
+                lbl_status.Text = "Reset";
+
+                doCommand(comPort, "ATZ");
+
+                comPort.Close();
+
+                BUT_getcurrent_Click(sender, e);
+            }
+            else
+            {
+
+                // off hook
+                doCommand(comPort, "ATO");
+
+                lbl_status.Text = "Fail";
+                CustomMessageBox.Show("Failed to enter command mode");
+            }
+
+            if (comPort.IsOpen)
+                comPort.Close();
         }
     }
 }

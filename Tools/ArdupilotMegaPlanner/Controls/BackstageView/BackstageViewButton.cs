@@ -13,8 +13,8 @@ namespace ArdupilotMega.Controls.BackstageView
         internal Color PencilBorderColor = Color.White;
         internal Color SelectedTextColor = Color.White;
         internal Color UnSelectedTextColor = Color.Gray;
-        internal Color HighlightColor1 = Color.DarkBlue;
-        internal Color HighlightColor2 = Color.Blue;
+        internal Color HighlightColor1 = SystemColors.Highlight;
+        internal Color HighlightColor2 = SystemColors.MenuHighlight;
         private bool _isMouseOver;
 
         //internal Color HighlightColor1 = Color.FromArgb(0x94, 0xc1, 0x1f);
@@ -62,7 +62,10 @@ namespace ArdupilotMega.Controls.BackstageView
 
         protected override void OnPaint(PaintEventArgs pevent)
         {
-           ((BackStageViewMenuPanel)this.Parent).PaintBackground(pevent);
+            if (this.Parent != null)
+            {
+                ((BackStageViewMenuPanel)this.Parent).PaintBackground(pevent);
+            }
 
            Graphics g = pevent.Graphics;
          
@@ -92,7 +95,7 @@ namespace ArdupilotMega.Controls.BackstageView
                                          new Point(Width, midheight - arSize)
                                      };
 
-               g.DrawString(Text, new Font(FontFamily.GenericSansSerif, 10, FontStyle.Bold), new SolidBrush(SelectedTextColor), 10, 6);
+               g.DrawString(Text, new Font(FontFamily.GenericSansSerif, 10, FontStyle.Bold), new SolidBrush(SelectedTextColor), 5, 6);
 
                var pencilBrush = new Pen(this.PencilBorderColor);
 

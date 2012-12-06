@@ -85,10 +85,10 @@
     <ManifestKeyFile>ArdupilotMega_TemporaryKey.pfx</ManifestKeyFile>
   </PropertyGroup>
   <PropertyGroup>
-    <GenerateManifests>true</GenerateManifests>
+    <GenerateManifests>false</GenerateManifests>
   </PropertyGroup>
   <PropertyGroup>
-    <SignManifests>true</SignManifests>
+    <SignManifests>false</SignManifests>
   </PropertyGroup>
   <PropertyGroup>
     <SignAssembly>false</SignAssembly>
@@ -126,16 +126,9 @@
     <Reference Include="alglibnet2, Version=0.0.0.0, Culture=neutral, processorArchitecture=MSIL">
       <SpecificVersion>False</SpecificVersion>
     </Reference>
-    <Reference Include="AStar">
-      <HintPath>..\..\..\..\..\Desktop\DIYDrones\myquadgit\astar\AStar\bin\Release\AStar.dll</HintPath>
-    </Reference>
     <Reference Include="BSE.Windows.Forms">
     </Reference>
     <Reference Include="Core">
-    </Reference>
-    <Reference Include="Crom.Controls, Version=2.0.5.21, Culture=neutral, processorArchitecture=MSIL">
-      <SpecificVersion>False</SpecificVersion>
-      <HintPath>..\..\..\..\..\Desktop\DIYDrones\crom.controls.dock\src\Crom.Controls\bin\Debug\Crom.Controls.dll</HintPath>
     </Reference>
     <Reference Include="DirectShowLib-2005">
     </Reference>
@@ -256,7 +249,7 @@
     <Compile Include="Attributes\PrivateAttribute.cs" />
     <Compile Include="CodeGen.cs" />
     <Compile Include="Comms\CommsFile.cs" />
-    <Compile Include="Comms\CommsSerialInterface.cs" />
+    <Compile Include="Comms\ICommsSerial.cs" />
     <Compile Include="Comms\CommsSerialPort.cs">
       <SubType>Component</SubType>
     </Compile>
@@ -388,6 +381,15 @@
     <Compile Include="Controls\ValuesControl.Designer.cs">
       <DependentUpon>ValuesControl.cs</DependentUpon>
     </Compile>
+    <None Include="Driver\arduino.cat">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+    <None Include="Driver\px4fmu.cat">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+    <None Include="Driver\signed.cer">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
     <None Include="HIL\AeroSimRC.cs">
       <SubType>Code</SubType>
     </None>
@@ -398,14 +400,21 @@
     <Compile Include="GCSViews\ConfigurationView\ConfigFailSafe.Designer.cs">
       <DependentUpon>ConfigFailSafe.cs</DependentUpon>
     </Compile>
-    <Compile Include="GCSViews\ConfigurationView\SetupFresh.cs">
+    <Compile Include="GCSViews\ConfigurationView\ConfigAteryx.cs">
       <SubType>UserControl</SubType>
     </Compile>
-    <Compile Include="GCSViews\ConfigurationView\SetupFresh.Designer.cs">
-      <DependentUpon>SetupFresh.cs</DependentUpon>
+    <Compile Include="GCSViews\ConfigurationView\ConfigAteryx.Designer.cs">
+      <DependentUpon>ConfigAteryx.cs</DependentUpon>
+    </Compile>
+    <Compile Include="GCSViews\ConfigurationView\ConfigAteryxSensors.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="GCSViews\ConfigurationView\ConfigAteryxSensors.Designer.cs">
+      <DependentUpon>ConfigAteryxSensors.cs</DependentUpon>
     </Compile>
     <Compile Include="HIL\Hil.cs" />
     <None Include="HIL\JSBSim.cs" />
+    <Compile Include="HIL\Wind.cs" />
     <Compile Include="HIL\XPlane.cs" />
     <Compile Include="OpenGLtest.cs">
       <SubType>UserControl</SubType>
@@ -433,12 +442,6 @@
     <Compile Include="HIL\Vector3.cs" />
     <Compile Include="Presenter\ConfigCameraStabPresenter.cs" />
     <Compile Include="Presenter\DelegateCommand.cs" />
-    <Compile Include="GCSViews\ConfigurationView\ConfigCameraStab.cs">
-      <SubType>UserControl</SubType>
-    </Compile>
-    <Compile Include="GCSViews\ConfigurationView\ConfigCameraStab.designer.cs">
-      <DependentUpon>ConfigCameraStab.cs</DependentUpon>
-    </Compile>
     <Compile Include="GCSViews\ConfigurationView\ConfigFriendlyParams.cs">
       <SubType>UserControl</SubType>
     </Compile>
@@ -669,7 +672,7 @@
     <Compile Include="SerialOutput.Designer.cs">
       <DependentUpon>SerialOutput.cs</DependentUpon>
     </Compile>
-    <Compile Include="Utilities\PathFind.cs" />
+    <None Include="Utilities\PathFind.cs" />
     <Compile Include="Utilities\Speech.cs" />
     <Compile Include="Splash.cs">
       <SubType>Form</SubType>
@@ -691,11 +694,23 @@
     <Compile Include="Utilities\EnumTranslator.cs" />
     <Compile Include="Utilities\ParameterMetaDataParser.cs" />
     <Compile Include="Utilities\ParameterMetaDataRepository.cs" />
+    <EmbeddedResource Include="Antenna\Tracker.de-DE.resx">
+      <DependentUpon>Tracker.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Antenna\Tracker.fr.resx">
+      <DependentUpon>Tracker.cs</DependentUpon>
+    </EmbeddedResource>
     <EmbeddedResource Include="Antenna\Tracker.resx">
       <DependentUpon>Tracker.cs</DependentUpon>
     </EmbeddedResource>
     <EmbeddedResource Include="Antenna\Tracker.zh-Hans.resx">
       <DependentUpon>Tracker.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Camera.de-DE.resx">
+      <DependentUpon>Camera.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Camera.fr.resx">
+      <DependentUpon>Camera.cs</DependentUpon>
     </EmbeddedResource>
     <EmbeddedResource Include="Camera.zh-Hans.resx">
       <DependentUpon>Camera.cs</DependentUpon>
@@ -739,6 +754,57 @@
     <EmbeddedResource Include="Controls\ValuesControl.resx">
       <DependentUpon>ValuesControl.cs</DependentUpon>
     </EmbeddedResource>
+    <EmbeddedResource Include="FollowMe.de-DE.resx">
+      <DependentUpon>FollowMe.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="FollowMe.fr.resx">
+      <DependentUpon>FollowMe.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="GCSViews\ConfigurationView\ConfigAccelerometerCalibrationPlane.de-DE.resx">
+      <DependentUpon>ConfigAccelerometerCalibrationPlane.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="GCSViews\ConfigurationView\ConfigAccelerometerCalibrationQuad.de-DE.resx">
+      <DependentUpon>ConfigAccelerometerCalibrationQuad.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="GCSViews\ConfigurationView\ConfigAP_Limits.de-DE.resx">
+      <DependentUpon>ConfigAP_Limits.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="GCSViews\ConfigurationView\ConfigAP_Limits.fr.resx">
+      <DependentUpon>ConfigAP_Limits.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="GCSViews\ConfigurationView\ConfigArducopter.de-DE.resx">
+      <DependentUpon>ConfigArducopter.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="GCSViews\ConfigurationView\ConfigArducopter.fr.resx">
+      <DependentUpon>ConfigArducopter.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="GCSViews\ConfigurationView\ConfigArduplane.de-DE.resx">
+      <DependentUpon>ConfigArduplane.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="GCSViews\ConfigurationView\ConfigArduplane.fr.resx">
+      <DependentUpon>ConfigArduplane.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="GCSViews\ConfigurationView\ConfigArdurover.de-DE.resx">
+      <DependentUpon>ConfigArdurover.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="GCSViews\ConfigurationView\ConfigArdurover.fr.resx">
+      <DependentUpon>ConfigArdurover.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="GCSViews\ConfigurationView\ConfigBatteryMonitoring.de-DE.resx">
+      <DependentUpon>ConfigBatteryMonitoring.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="GCSViews\ConfigurationView\ConfigFailSafe.de-DE.resx">
+      <DependentUpon>ConfigFailSafe.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="GCSViews\ConfigurationView\ConfigFlightModes.de-DE.resx">
+      <DependentUpon>ConfigFlightModes.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="GCSViews\ConfigurationView\ConfigHardwareOptions.de-DE.resx">
+      <DependentUpon>ConfigHardwareOptions.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="GCSViews\ConfigurationView\ConfigMount.fr.resx">
+      <DependentUpon>ConfigMount.cs</DependentUpon>
+    </EmbeddedResource>
     <EmbeddedResource Include="GCSViews\ConfigurationView\ConfigMount.zh-Hans.resx">
       <DependentUpon>ConfigMount.cs</DependentUpon>
     </EmbeddedResource>
@@ -763,11 +829,101 @@
     <EmbeddedResource Include="GCSViews\ConfigurationView\ConfigFailSafe.zh-TW.resx">
       <DependentUpon>ConfigFailSafe.cs</DependentUpon>
     </EmbeddedResource>
-    <EmbeddedResource Include="GCSViews\ConfigurationView\SetupFresh.resx">
-      <DependentUpon>SetupFresh.cs</DependentUpon>
+    <EmbeddedResource Include="GCSViews\ConfigurationView\ConfigPlanner.de-DE.resx">
+      <DependentUpon>ConfigPlanner.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="GCSViews\ConfigurationView\ConfigPlanner.fr.resx">
+      <DependentUpon>ConfigPlanner.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="GCSViews\ConfigurationView\ConfigRadioInput.de-DE.resx">
+      <DependentUpon>ConfigRadioInput.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="GCSViews\ConfigurationView\ConfigRawParams.de-DE.resx">
+      <DependentUpon>ConfigRawParams.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="GCSViews\ConfigurationView\ConfigRawParams.fr.resx">
+      <DependentUpon>ConfigRawParams.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="GCSViews\ConfigurationView\ConfigTradHeli.de-DE.resx">
+      <DependentUpon>ConfigTradHeli.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="GCSViews\ConfigurationView\ConfigAteryx.de-DE.resx">
+      <DependentUpon>ConfigAteryx.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="GCSViews\ConfigurationView\ConfigAteryx.fr.resx">
+      <DependentUpon>ConfigAteryx.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="GCSViews\ConfigurationView\ConfigAteryx.resx">
+      <DependentUpon>ConfigAteryx.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="GCSViews\ConfigurationView\ConfigAteryxSensors.de-DE.resx">
+      <DependentUpon>ConfigAteryxSensors.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="GCSViews\ConfigurationView\ConfigAteryxSensors.es-ES.resx">
+      <DependentUpon>ConfigAteryxSensors.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="GCSViews\ConfigurationView\ConfigAteryxSensors.fr.resx">
+      <DependentUpon>ConfigAteryxSensors.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="GCSViews\ConfigurationView\ConfigAteryxSensors.it-IT.resx">
+      <DependentUpon>ConfigAteryxSensors.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="GCSViews\ConfigurationView\ConfigAteryxSensors.pl.resx">
+      <DependentUpon>ConfigAteryxSensors.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="GCSViews\ConfigurationView\ConfigAteryxSensors.resx">
+      <DependentUpon>ConfigAteryxSensors.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="GCSViews\ConfigurationView\ConfigAteryxSensors.zh-Hans.resx">
+      <DependentUpon>ConfigAteryxSensors.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="GCSViews\ConfigurationView\ConfigAteryxSensors.zh-TW.resx">
+      <DependentUpon>ConfigAteryxSensors.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="GCSViews\Firmware.de-DE.resx">
+      <DependentUpon>Firmware.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="GCSViews\FlightData.de-DE.resx">
+      <DependentUpon>FlightData.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="GCSViews\FlightPlanner.de-DE.resx">
+      <DependentUpon>FlightPlanner.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="GCSViews\Help.de-DE.resx">
+      <DependentUpon>Help.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="GCSViews\Simulation.de-DE.resx">
+      <DependentUpon>Simulation.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="GCSViews\Terminal.de-DE.resx">
+      <DependentUpon>Terminal.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="JoystickSetup.de-DE.resx">
+      <DependentUpon>JoystickSetup.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Log.de-DE.resx">
+      <DependentUpon>Log.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="LogBrowse.de-DE.resx">
+      <DependentUpon>LogBrowse.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="MavlinkLog.de-DE.resx">
+      <DependentUpon>MavlinkLog.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="MavlinkLog.zh-Hans.resx">
+      <DependentUpon>MavlinkLog.cs</DependentUpon>
     </EmbeddedResource>
     <EmbeddedResource Include="OpenGLtest.resx">
       <DependentUpon>OpenGLtest.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Radio\3DRradio.de-DE.resx">
+      <DependentUpon>3DRradio.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Radio\3DRradio.fr.resx">
+      <DependentUpon>3DRradio.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="RAW_Sensor.de-DE.resx">
+      <DependentUpon>RAW_Sensor.cs</DependentUpon>
     </EmbeddedResource>
     <EmbeddedResource Include="SerialOutput2.resx">
       <DependentUpon>SerialOutput2.cs</DependentUpon>
@@ -819,9 +975,6 @@
     </EmbeddedResource>
     <EmbeddedResource Include="GCSViews\ConfigurationView\ConfigBatteryMonitoring.zh-TW.resx">
       <DependentUpon>ConfigBatteryMonitoring.cs</DependentUpon>
-    </EmbeddedResource>
-    <EmbeddedResource Include="GCSViews\ConfigurationView\ConfigCameraStab.resx">
-      <DependentUpon>ConfigCameraStab.cs</DependentUpon>
     </EmbeddedResource>
     <EmbeddedResource Include="GCSViews\ConfigurationView\ConfigFlightModes.es-ES.resx">
       <DependentUpon>ConfigFlightModes.cs</DependentUpon>
@@ -1284,7 +1437,13 @@
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Content>
     <Content Include="ChangeLog.txt" />
-    <Content Include="Driver\Arduino MEGA 2560.inf">
+    <Content Include="Driver\arduino.inf">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
+    <Content Include="Driver\dpinst.xml" />
+    <Content Include="Driver\DPInstx64.exe" />
+    <Content Include="Driver\DPInstx86.exe" />
+    <Content Include="Driver\px4fmu.inf">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Content>
     <Content Include="hud.html">
@@ -1294,6 +1453,7 @@
     <Content Include="JSBSim.exe" />
     <Content Include="mavcmd.xml">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+      <SubType>Designer</SubType>
     </Content>
     <None Include="Resources\octox.png" />
     <None Include="Resources\y6.png" />
@@ -1312,6 +1472,7 @@
     <None Include="Resources\frames_plus.png" />
     <None Include="Resources\frames_x.png" />
     <None Include="Resources\cameraGimalYaw.png" />
+    <None Include="Resources\BR-APMPWRDEAN-2.jpg" />
     <Content Include="Resources\MAVCmd.zh-Hans.txt" />
     <None Include="Resources\MAVParam.txt" />
     <Content Include="Resources\MAVParam.zh-Hans.txt" />

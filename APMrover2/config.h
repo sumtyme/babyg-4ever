@@ -50,40 +50,17 @@
 # define CONFIG_APM_HARDWARE APM_HARDWARE_APM1
 #endif
 
-#ifndef X_PLANE
-# define X_PLANE DISABLED
-#endif
-
-#if X_PLANE == ENABLED
-# define LITE ENABLED
-#else
-#ifndef LITE
-# define LITE DISABLED
-#endif
-#endif
-
-#if defined( __AVR_ATmega1280__ )
-#define CLI_ENABLED DISABLED
-#define LOGGING_ENABLED DISABLED
-#endif
-
 //////////////////////////////////////////////////////////////////////////////
 // APM2 HARDWARE DEFAULTS
 //
 
 #if CONFIG_APM_HARDWARE == APM_HARDWARE_APM2
-# define CONFIG_IMU_TYPE   CONFIG_IMU_MPU6000
+# define CONFIG_INS_TYPE   CONFIG_INS_MPU6000
 # define CONFIG_PUSHBUTTON DISABLED
 # define CONFIG_RELAY      DISABLED
 # define MAG_ORIENTATION   AP_COMPASS_APM2_SHIELD
 # define CONFIG_SONAR_SOURCE SONAR_SOURCE_ANALOG_PIN
-# define CONFIG_PITOT_SOURCE PITOT_SOURCE_ANALOG_PIN
 # define MAGNETOMETER ENABLED
-# ifdef APM2_BETA_HARDWARE
-#  define CONFIG_BARO     AP_BARO_BMP085
-# else // APM2 Production Hardware (default)
-#  define CONFIG_BARO     AP_BARO_MS5611
-# endif
 #endif
 
 //////////////////////////////////////////////////////////////////////////////
@@ -115,68 +92,26 @@
 # define CURRENT_PIN_1	  2
 #endif
 
-//////////////////////////////////////////////////////////////////////////////
-// AIRSPEED_SENSOR
-// AIRSPEED_RATIO
-//
-#ifndef AIRSPEED_SENSOR
-# define AIRSPEED_SENSOR		DISABLED
-#endif
-
-#ifndef AIRSPEED_RATIO
-# define AIRSPEED_RATIO			1.9936		// Note - this varies from the value in ArduPilot due to the difference in ADC resolution
+#ifdef DESKTOP_BUILD
+#define CONFIG_SONAR DISABLED
 #endif
 
 //////////////////////////////////////////////////////////////////////////////
 // IMU Selection
 //
-#ifndef CONFIG_IMU_TYPE
-# define CONFIG_IMU_TYPE CONFIG_IMU_OILPAN
+#ifndef CONFIG_INS_TYPE
+# define CONFIG_INS_TYPE CONFIG_INS_OILPAN
 #endif
 
 //////////////////////////////////////////////////////////////////////////////
 // ADC Enable - used to eliminate for systems which don't have ADC.
 //
 #ifndef CONFIG_ADC
-# if CONFIG_IMU_TYPE == CONFIG_IMU_OILPAN
+# if CONFIG_INS_TYPE == CONFIG_INS_OILPAN
 #   define CONFIG_ADC ENABLED
 # else
 #   define CONFIG_ADC DISABLED
 # endif
-#endif
-
-//////////////////////////////////////////////////////////////////////////////
-// Barometer
-//
-
-#ifndef CONFIG_BARO
-# define CONFIG_BARO AP_BARO_BMP085
-#endif
-
-//////////////////////////////////////////////////////////////////////////////
-// Pitot
-//
-
-#ifndef PITOT_ENABLED
-# define PITOT_ENABLED         	DISABLED
-#endif
-
-#ifndef CONFIG_PITOT_SOURCE
-# define CONFIG_PITOT_SOURCE PITOT_SOURCE_ADC
-#endif
-
-#if CONFIG_PITOT_SOURCE == PITOT_SOURCE_ADC
-# ifndef CONFIG_PITOT_SOURCE_ADC_CHANNEL
-#  define CONFIG_PITOT_SOURCE_ADC_CHANNEL 7
-# endif
-#elif CONFIG_PITOT_SOURCE == PITOT_SOURCE_ANALOG_PIN
-# ifndef CONFIG_PITOT_SOURCE_ANALOG_PIN
-#  define CONFIG_PITOT_SOURCE_ANALOG_PIN 0
-# endif
-#else
-# warning Invalid value for CONFIG_PITOT_SOURCE, disabling airspeed
-# undef PITOT_ENABLED
-# define PITOT_ENABLED DISABLED
 #endif
 
 #ifndef SONAR_TYPE
@@ -227,14 +162,6 @@
 #define HIL_MODE	HIL_MODE_DISABLED
 #endif
 
-#if HIL_MODE != HIL_MODE_DISABLED	// we are in HIL mode
- # undef GPS_PROTOCOL
- # define GPS_PROTOCOL GPS_PROTOCOL_NONE
-
-  #undef CONFIG_SONAR
- #define CONFIG_SONAR DISABLED
-#endif
-
 //////////////////////////////////////////////////////////////////////////////
 // GPS_PROTOCOL
 //
@@ -278,14 +205,10 @@
 #endif
 #ifndef VOLT_DIV_RATIO
 # define VOLT_DIV_RATIO			3.56	// This is the proper value for an on-board APM1 voltage divider with a 3.9kOhm resistor
-//# define VOLT_DIV_RATIO		15.70	// This is the proper value for the AttoPilot 50V/90A sensor
-//# define VOLT_DIV_RATIO		4.127	// This is the proper value for the AttoPilot 13.6V/45A sensor
-
 #endif
 
 #ifndef CURR_AMP_PER_VOLT
 # define CURR_AMP_PER_VOLT		27.32	// This is the proper value for the AttoPilot 50V/90A sensor
-//# define CURR_AMP_PER_VOLT	13.66	// This is the proper value for the AttoPilot 13.6V/45A sensor
 #endif
 
 #ifndef CURR_AMPS_OFFSET
@@ -350,18 +273,6 @@
 #endif
 
 
-#ifndef FLAP_1_PERCENT
-# define FLAP_1_PERCENT 0
-#endif
-#ifndef FLAP_1_SPEED
-# define FLAP_1_SPEED 255
-#endif
-#ifndef FLAP_2_PERCENT
-# define FLAP_2_PERCENT 0
-#endif
-#ifndef FLAP_2_SPEED
-# define FLAP_2_SPEED 255
-#endif
 //////////////////////////////////////////////////////////////////////////////
 // FLIGHT_MODE
 // FLIGHT_MODE_CHANNEL
@@ -435,14 +346,6 @@
 #endif
 
 //////////////////////////////////////////////////////////////////////////////
-// THROTTLE_REVERSE
-//
-#ifndef THROTTLE_REVERSE
-# define THROTTLE_REVERSE		DISABLED
-#endif
-
-
-//////////////////////////////////////////////////////////////////////////////
 // ENABLE_STICK_MIXING
 //
 #ifndef ENABLE_STICK_MIXING
@@ -472,69 +375,11 @@
 #endif
 
 //////////////////////////////////////////////////////////////////////////////
-// ENABLE_AIR_START
-//
-#ifndef ENABLE_AIR_START
-# define ENABLE_AIR_START		DISABLED
-#endif
-
-//////////////////////////////////////////////////////////////////////////////
-// ENABLE REVERSE_SWITCH
-//
-#ifndef REVERSE_SWITCH
-# define REVERSE_SWITCH		ENABLED
-#endif
-
-//////////////////////////////////////////////////////////////////////////////
-// ENABLE ELEVON_MIXING
-//
-#ifndef ELEVON_MIXING
-# define ELEVON_MIXING		DISABLED
-#endif
-#ifndef ELEVON_REVERSE
-# define ELEVON_REVERSE	    DISABLED
-#endif
-#ifndef ELEVON_CH1_REVERSE
-# define ELEVON_CH1_REVERSE	DISABLED
-#endif
-#ifndef ELEVON_CH2_REVERSE
-# define ELEVON_CH2_REVERSE	DISABLED
-#endif
-#ifndef FLAPERON
-# define FLAPERON	DISABLED
-#endif
-
-//////////////////////////////////////////////////////////////////////////////
 // MOUNT (ANTENNA OR CAMERA)
 //
 #ifndef MOUNT
 # define MOUNT		DISABLED
 #endif
-
-#if defined( __AVR_ATmega1280__ ) && CAMERA == ENABLED
-// The small ATmega1280 chip does not have enough memory for camera support
-// so disable CLI, this will allow camera support and other improvements to fit.
-// This should almost have no side effects, because the APM planner can now do a complete board setup.
-#define CLI_ENABLED DISABLED
-#endif
-
-
-//////////////////////////////////////////////////////////////////////////////
-//////////////////////////////////////////////////////////////////////////////
-// FLIGHT AND NAVIGATION CONTROL
-//////////////////////////////////////////////////////////////////////////////
-//////////////////////////////////////////////////////////////////////////////
-
-//////////////////////////////////////////////////////////////////////////////
-// Altitude measurement and control.
-//
-#ifndef ALT_EST_GAIN
-# define ALT_EST_GAIN			0.01
-#endif
-#ifndef ALTITUDE_MIX
-# define ALTITUDE_MIX			1
-#endif
-
 
 //////////////////////////////////////////////////////////////////////////////
 // AIRSPEED_CRUISE
@@ -569,40 +414,6 @@
 # define MIN_GNDSPEED			0 // m/s (0 disables)
 #endif
 #define MIN_GNDSPEED_CM MIN_GNDSPEED*100
-
-//////////////////////////////////////////////////////////////////////////////
-// FLY_BY_WIRE_B airspeed control
-//
-#ifndef AIRSPEED_FBW_MIN
-# define AIRSPEED_FBW_MIN		6
-#endif
-#ifndef AIRSPEED_FBW_MAX
-# define AIRSPEED_FBW_MAX		22
-#endif
-
-#ifndef ALT_HOLD_FBW
-# define ALT_HOLD_FBW 0
-#endif
-#define ALT_HOLD_FBW_CM ALT_HOLD_FBW*100
-
-
-
-/*  The following parmaeters have no corresponding control implementation
-#ifndef THROTTLE_ALT_P
-# define THROTTLE_ALT_P         0.32
-#endif
-#ifndef THROTTLE_ALT_I
-# define THROTTLE_ALT_I         0.0
-#endif
-#ifndef THROTTLE_ALT_D
-# define THROTTLE_ALT_D         0.0
-#endif
-#ifndef THROTTLE_ALT_INT_MAX
-# define THROTTLE_ALT_INT_MAX   20
-#endif
-#define THROTTLE_ALT_INT_MAX_CM THROTTLE_ALT_INT_MAX*100
-*/
-
 
 //////////////////////////////////////////////////////////////////////////////
 // Servo Mapping
@@ -835,24 +646,7 @@
 // Navigation defaults
 //
 #ifndef WP_RADIUS_DEFAULT
-# define WP_RADIUS_DEFAULT		30
-#endif
-
-#ifndef LOITER_RADIUS_DEFAULT
-# define LOITER_RADIUS_DEFAULT 60
-#endif
-
-#ifndef ALT_HOLD_HOME
-# define ALT_HOLD_HOME 100
-#endif
-#define ALT_HOLD_HOME_CM ALT_HOLD_HOME*100
-
-#ifndef USE_CURRENT_ALT
-# define USE_CURRENT_ALT FALSE
-#endif
-
-#ifndef INVERTED_FLIGHT_PWM
-# define INVERTED_FLIGHT_PWM 1750
+# define WP_RADIUS_DEFAULT		2
 #endif
 
 //////////////////////////////////////////////////////////////////////////////
@@ -884,22 +678,6 @@
 # define CLI_SLIDER_ENABLED ENABLED
 #endif
 
-// use this to disable gen-fencing
-#ifndef GEOFENCE_ENABLED
-# define GEOFENCE_ENABLED ENABLED
-#endif
-
-// pwm value on FENCE_CHANNEL to use to enable fenced mode
-#ifndef FENCE_ENABLE_PWM
-# define FENCE_ENABLE_PWM 1750
-#endif
-
-// a digital pin to set high when the geo-fence triggers. Defaults
-// to -1, which means don't activate a pin
-#ifndef FENCE_TRIGGERED_PIN
-# define FENCE_TRIGGERED_PIN -1
-#endif
-
 // if RESET_SWITCH_CH is not zero, then this is the PWM value on
 // that channel where we reset the control mode to the current switch
 // position (to for example return to switched mode after failsafe or
@@ -908,3 +686,10 @@
 # define RESET_SWITCH_CHAN_PWM 1750
 #endif
 
+#ifndef BOOSTER
+# define BOOSTER              2    // booster factor x1 = 1 or x2 = 2
+#endif
+
+#ifndef SONAR_ENABLED
+# define SONAR_ENABLED       DISABLED
+#endif

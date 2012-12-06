@@ -180,10 +180,14 @@ namespace ArdupilotMega.GCSViews.ConfigurationView
                         if (ctl.GetType() == typeof(NumericUpDown))
                         {
 
+                            float numbervalue = (float)MainV2.comPort.param[value];
+
+                            MAVLink.modifyParamForDisplay(true, value, ref numbervalue);
+
                             NumericUpDown thisctl = ((NumericUpDown)ctl);
                             thisctl.Maximum = 9000;
                             thisctl.Minimum = -9000;
-                            thisctl.Value = (decimal)(float)MainV2.comPort.param[value];
+                            thisctl.Value = (decimal)numbervalue;
                             thisctl.Increment = (decimal)0.001;
                             if (thisctl.Name.EndsWith("_P") || thisctl.Name.EndsWith("_I") || thisctl.Name.EndsWith("_D")
                                 || thisctl.Name.EndsWith("_LOW") || thisctl.Name.EndsWith("_HIGH") || thisctl.Value == 0
@@ -197,16 +201,14 @@ namespace ArdupilotMega.GCSViews.ConfigurationView
                                 thisctl.DecimalPlaces = 1;
                             }
 
-                            if (thisctl.Name.EndsWith("_IMAX"))
-                            {
-                                thisctl.Maximum = 180;
-                                thisctl.Minimum = -180;
-                            }
-
                             if (thisctl.Name.ToUpper().EndsWith("THR_RATE_IMAX"))
                             {
                                 thisctl.Maximum = 1000; // is a pwm
                                 thisctl.Minimum = 0;
+                            } else if (thisctl.Name.EndsWith("_IMAX"))
+                            {
+                                thisctl.Maximum = 180;
+                                thisctl.Minimum = -180;
                             }
 
                             thisctl.Enabled = true;
@@ -271,6 +273,7 @@ namespace ArdupilotMega.GCSViews.ConfigurationView
                 if (sender.GetType() == typeof(NumericUpDown))
                 {
                     value = float.Parse(((Control)sender).Text);
+                    MAVLink.modifyParamForDisplay(false, ((Control)sender).Name, ref value);
                     changes[name] = value;
                 }
                 else if (sender.GetType() == typeof(ComboBox))
@@ -296,7 +299,7 @@ namespace ArdupilotMega.GCSViews.ConfigurationView
                         {
                             string newname = name.Replace("_RLL_", "_PIT_");
                             Control[] arr = this.Controls.Find(newname, true);
-                            changes[newname] = float.Parse(((Control)sender).Text);
+                            changes[newname] = value;
 
                             if (arr.Length > 0)
                             {
@@ -309,7 +312,7 @@ namespace ArdupilotMega.GCSViews.ConfigurationView
                         {
                             string newname = name.Replace("_PIT_", "_RLL_");
                             Control[] arr = this.Controls.Find(newname, true);
-                            changes[newname] = float.Parse(((Control)sender).Text);
+                            changes[newname] = value;
 
                             if (arr.Length > 0)
                             {
@@ -324,7 +327,7 @@ namespace ArdupilotMega.GCSViews.ConfigurationView
                 {
                     string newname = name.Replace("NAV_LAT_", "NAV_LON_");
                     Control[] arr = this.Controls.Find(newname, true);
-                    changes[newname] = float.Parse(((Control)sender).Text);
+                    changes[newname] = value;
 
                     if (arr.Length > 0)
                     {
@@ -337,7 +340,7 @@ namespace ArdupilotMega.GCSViews.ConfigurationView
                 {
                     string newname = name.Replace("LOITER_LAT_", "LOITER_LON_");
                     Control[] arr = this.Controls.Find(newname, true);
-                    changes[newname] = float.Parse(((Control)sender).Text);
+                    changes[newname] = value;
 
                     if (arr.Length > 0)
                     {
@@ -350,7 +353,7 @@ namespace ArdupilotMega.GCSViews.ConfigurationView
                 {
                     string newname = name.Replace("HLD_LAT_", "HLD_LON_");
                     Control[] arr = this.Controls.Find(newname, true);
-                    changes[newname] = float.Parse(((Control)sender).Text);
+                    changes[newname] = value;
 
                     if (arr.Length > 0)
                     {

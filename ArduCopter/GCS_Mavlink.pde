@@ -153,6 +153,13 @@ static NOINLINE void send_extended_status1(mavlink_channel_t chan, uint16_t pack
     // at the moment all sensors/controllers are assumed healthy
     control_sensors_health = control_sensors_present;
 
+    if (!compass.healthy) {
+        control_sensors_health &= ~(1<<2); // compass
+    }
+    if (!compass.use_for_yaw()) {
+        control_sensors_enabled &= ~(1<<2); // compass
+    }
+
     uint16_t battery_current = -1;
     uint8_t battery_remaining = -1;
 
@@ -193,17 +200,27 @@ static void NOINLINE send_meminfo(mavlink_channel_t chan)
 
 static void NOINLINE send_location(mavlink_channel_t chan)
 {
-    Matrix3f rot = ahrs.get_dcm_matrix(); // neglecting angle of attack for now
+    uint32_t fix_time;
+    // if we have a GPS fix, take the time as the last fix time. That
+    // allows us to correctly calculate velocities and extrapolate
+    // positions.
+    // If we don't have a GPS fix then we are dead reckoning, and will
+    // use the current boot time as the fix time.    
+    if (g_gps->status() == GPS::GPS_OK) {
+        fix_time = g_gps->last_fix_time;
+    } else {
+        fix_time = millis();
+    }
     mavlink_msg_global_position_int_send(
         chan,
-        millis(),
+        fix_time,
         current_loc.lat,                // in 1E7 degrees
         current_loc.lng,                // in 1E7 degrees
         g_gps->altitude * 10,             // millimeters above sea level
         (current_loc.alt - home.alt) * 10,           // millimeters above ground
-        g_gps->ground_speed * rot.a.x,  // X speed cm/s
-        g_gps->ground_speed * rot.b.x,  // Y speed cm/s
-        g_gps->ground_speed * rot.c.x,
+        g_gps->velocity_north() * 100,  // X speed cm/s (+ve North)
+        g_gps->velocity_east()  * 100,  // Y speed cm/s (+ve East)
+        g_gps->velocity_down()  * -100, // Z speed cm/s (+ve up)
         g_gps->ground_course);          // course in 1/100 degree
 }
 
@@ -278,7 +295,6 @@ static void NOINLINE send_gps_raw(mavlink_channel_t chan)
 
 static void NOINLINE send_servo_out(mavlink_channel_t chan)
 {
-    const uint8_t rssi = 1;
     // normalized values scaled to -10000 to 10000
     // This is used for HIL.  Do not change without discussing with HIL maintainers
 
@@ -296,7 +312,7 @@ static void NOINLINE send_servo_out(mavlink_channel_t chan)
         0,
         0,
         0,
-        rssi);
+        receiver_rssi);
 #else
  #if X_PLANE == ENABLED
     /* update by JLN for X-Plane HIL */
@@ -313,7 +329,7 @@ static void NOINLINE send_servo_out(mavlink_channel_t chan)
             10000 * g.rc_2.norm_output(),
             10000 * g.rc_3.norm_output(),
             10000 * g.rc_4.norm_output(),
-            rssi);
+            receiver_rssi);
     }else{
         mavlink_msg_rc_channels_scaled_send(
             chan,
@@ -327,7 +343,7 @@ static void NOINLINE send_servo_out(mavlink_channel_t chan)
             10000 * g.rc_2.norm_output(),
             10000 * g.rc_3.norm_output(),
             10000 * g.rc_4.norm_output(),
-            rssi);
+            receiver_rssi);
     }
 
  #else
@@ -343,14 +359,13 @@ static void NOINLINE send_servo_out(mavlink_channel_t chan)
         10000 * g.rc_2.norm_output(),
         10000 * g.rc_3.norm_output(),
         10000 * g.rc_4.norm_output(),
-        rssi);
+        receiver_rssi);
  #endif
 #endif
 }
 
 static void NOINLINE send_radio_in(mavlink_channel_t chan)
 {
-    const uint8_t rssi = 1;
     mavlink_msg_rc_channels_raw_send(
         chan,
         millis(),
@@ -363,7 +378,7 @@ static void NOINLINE send_radio_in(mavlink_channel_t chan)
         g.rc_6.radio_in,
         g.rc_7.radio_in,
         g.rc_8.radio_in,
-        rssi);
+        receiver_rssi);
 }
 
 static void NOINLINE send_radio_out(mavlink_channel_t chan)
@@ -396,8 +411,8 @@ static void NOINLINE send_vfr_hud(mavlink_channel_t chan)
 
 static void NOINLINE send_raw_imu1(mavlink_channel_t chan)
 {
-    Vector3f accel = imu.get_accel();
-    Vector3f gyro = imu.get_gyro();
+    Vector3f accel = ins.get_accel();
+    Vector3f gyro = ins.get_gyro();
     mavlink_msg_raw_imu_send(
         chan,
         micros(),
@@ -425,6 +440,8 @@ static void NOINLINE send_raw_imu2(mavlink_channel_t chan)
 static void NOINLINE send_raw_imu3(mavlink_channel_t chan)
 {
     Vector3f mag_offsets = compass.get_offsets();
+    Vector3f accel_offsets = ins.get_accel_offsets();
+    Vector3f gyro_offsets = ins.get_gyro_offsets();
 
     mavlink_msg_sensor_offsets_send(chan,
                                     mag_offsets.x,
@@ -433,8 +450,12 @@ static void NOINLINE send_raw_imu3(mavlink_channel_t chan)
                                     compass.get_declination(),
                                     barometer.get_raw_pressure(),
                                     barometer.get_raw_temp(),
-                                    imu.gx(), imu.gy(), imu.gz(),
-                                    imu.ax(), imu.ay(), imu.az());
+                                    gyro_offsets.x,
+                                    gyro_offsets.y,
+                                    gyro_offsets.z,
+                                    accel_offsets.x,
+                                    accel_offsets.y,
+                                    accel_offsets.z);
 }
 
 static void NOINLINE send_gps_status(mavlink_channel_t chan)
@@ -472,7 +493,7 @@ static bool telemetry_delayed(mavlink_channel_t chan)
         return false;
     }
 #if USB_MUX_PIN > 0
-    if (chan == MAVLINK_COMM_0 && usb_connected) {
+    if (chan == MAVLINK_COMM_0 && ap_system.usb_connected) {
         // this is an APM2 with USB telemetry
         return false;
     }
@@ -776,14 +797,18 @@ GCS_MAVLINK::update(void)
                 crlf_count = 0;
             }
             if (crlf_count == 3) {
-                run_cli();
+                run_cli(_port);
             }
         }
 #endif
 
         // Try to get a new message
         if (mavlink_parse_char(chan, c, &msg, &status)) {
-            mavlink_active = true;
+            // we exclude radio packets to make it possible to use the
+            // CLI over the radio
+            if (msg.msgid != MAVLINK_MSG_ID_RADIO) {
+                mavlink_active = true;
+            }
             handleMessage(&msg);
         }
     }
@@ -867,14 +892,14 @@ GCS_MAVLINK::data_stream_send(void)
         send_message(MSG_RAW_IMU1);
         send_message(MSG_RAW_IMU2);
         send_message(MSG_RAW_IMU3);
-        //Serial.printf("mav1 %d\n", (int)streamRateRawSensors.get());
+        //cliSerial->printf("mav1 %d\n", (int)streamRateRawSensors.get());
     }
 
     if (stream_trigger(STREAM_EXTENDED_STATUS)) {
         send_message(MSG_EXTENDED_STATUS1);
         send_message(MSG_EXTENDED_STATUS2);
         send_message(MSG_CURRENT_WAYPOINT);
-        send_message(MSG_GPS_RAW);                                      // TODO - remove this message after location message is working
+        send_message(MSG_GPS_RAW);
         send_message(MSG_NAV_CONTROLLER_OUTPUT);
         send_message(MSG_LIMITS_STATUS);
 
@@ -890,30 +915,29 @@ GCS_MAVLINK::data_stream_send(void)
     }
 
     if (stream_trigger(STREAM_POSITION)) {
-        // sent with GPS read
-        //Serial.printf("mav3 %d\n", (int)streamRatePosition.get());
+        send_message(MSG_LOCATION);
     }
 
     if (stream_trigger(STREAM_RAW_CONTROLLER)) {
         send_message(MSG_SERVO_OUT);
-        //Serial.printf("mav4 %d\n", (int)streamRateRawController.get());
+        //cliSerial->printf("mav4 %d\n", (int)streamRateRawController.get());
     }
 
     if (stream_trigger(STREAM_RC_CHANNELS)) {
         send_message(MSG_RADIO_OUT);
         send_message(MSG_RADIO_IN);
-        //Serial.printf("mav5 %d\n", (int)streamRateRCChannels.get());
+        //cliSerial->printf("mav5 %d\n", (int)streamRateRCChannels.get());
     }
 
     if (stream_trigger(STREAM_EXTRA1)) {
         send_message(MSG_ATTITUDE);
         send_message(MSG_SIMSTATE);
-        //Serial.printf("mav6 %d\n", (int)streamRateExtra1.get());
+        //cliSerial->printf("mav6 %d\n", (int)streamRateExtra1.get());
     }
 
     if (stream_trigger(STREAM_EXTRA2)) {
         send_message(MSG_VFR_HUD);
-        //Serial.printf("mav7 %d\n", (int)streamRateExtra2.get());
+        //cliSerial->printf("mav7 %d\n", (int)streamRateExtra2.get());
     }
 
     if (stream_trigger(STREAM_EXTRA3)) {
@@ -1035,7 +1059,7 @@ void GCS_MAVLINK::handleMessage(mavlink_message_t* msg)
         mavlink_msg_command_long_decode(msg, &packet);
         if (mavlink_check_target(packet.target_system, packet.target_component)) break;
 
-        uint8_t result;
+        uint8_t result = MAV_RESULT_UNSUPPORTED;
 
         // do command
         send_text(SEVERITY_LOW,PSTR("command received: "));
@@ -1066,10 +1090,14 @@ void GCS_MAVLINK::handleMessage(mavlink_message_t* msg)
             if (packet.param1 == 1 ||
                 packet.param2 == 1 ||
                 packet.param3 == 1) {
-                imu.init_accel(mavlink_delay, flash_leds);
+                ins.init_accel(mavlink_delay, flash_leds);
             }
             if (packet.param4 == 1) {
                 trim_radio();
+            }
+            if (packet.param5 == 1) {
+                // this blocks
+                ins.calibrate_accel(mavlink_delay, flash_leds, gcs_send_text_fmt, setup_wait_key);
             }
             result = MAV_RESULT_ACCEPTED;
             break;
@@ -1089,6 +1117,15 @@ void GCS_MAVLINK::handleMessage(mavlink_message_t* msg)
                 result = MAV_RESULT_UNSUPPORTED;
             }
             break;
+
+        case MAV_CMD_PREFLIGHT_REBOOT_SHUTDOWN:
+            if (packet.param1 == 1) {
+                reboot_apm();
+                result = MAV_RESULT_ACCEPTED;
+            }
+            break;
+
+
         default:
             result = MAV_RESULT_UNSUPPORTED;
             break;
@@ -1331,18 +1368,22 @@ void GCS_MAVLINK::handleMessage(mavlink_message_t* msg)
         mavlink_param_request_read_t packet;
         mavlink_msg_param_request_read_decode(msg, &packet);
         if (mavlink_check_target(packet.target_system,packet.target_component)) break;
-        if (packet.param_index != -1) {
-            gcs_send_text_P(SEVERITY_LOW, PSTR("Param by index not supported"));
-            break;
-        }
-
         enum ap_var_type p_type;
-        AP_Param *vp = AP_Param::find(packet.param_id, &p_type);
-        if (vp == NULL) {
-            gcs_send_text_fmt(PSTR("Unknown parameter %s"), packet.param_id);
-            break;
+        AP_Param *vp;
+        if (packet.param_index != -1) {
+            vp = AP_Param::find_by_index(packet.param_index, &p_type);
+            if (vp == NULL) {
+                gcs_send_text_fmt(PSTR("Unknown parameter index %d"), packet.param_index);
+                break;
+            }
+        } else {
+            vp = AP_Param::find(packet.param_id, &p_type);
+            if (vp == NULL) {
+                gcs_send_text_fmt(PSTR("Unknown parameter %.16s"), packet.param_id);
+                break;
+            }
         }
-        char param_name[ONBOARD_PARAM_NAME_LENGTH];
+        char param_name[AP_MAX_NAME_SIZE];
         vp->copy_name(param_name, sizeof(param_name), true);
 
         float value = vp->cast_to_float(p_type);
@@ -1351,7 +1392,8 @@ void GCS_MAVLINK::handleMessage(mavlink_message_t* msg)
             param_name,
             value,
             mav_var_type(p_type),
-            -1, -1);
+            _count_parameters(),
+            packet.param_index);
         break;
     }
 
@@ -1577,7 +1619,7 @@ void GCS_MAVLINK::handleMessage(mavlink_message_t* msg)
             if (!waypoint_receiving) break;
 
 
-            //Serial.printf("req: %d, seq: %d, total: %d\n", waypoint_request_i,packet.seq, g.command_total.get());
+            //cliSerial->printf("req: %d, seq: %d, total: %d\n", waypoint_request_i,packet.seq, g.command_total.get());
 
             // check if this is the requested waypoint
             if (packet.seq != waypoint_request_i)
@@ -1623,9 +1665,9 @@ void GCS_MAVLINK::handleMessage(mavlink_message_t* msg)
 
         // set parameter
 
-        char key[ONBOARD_PARAM_NAME_LENGTH+1];
-        strncpy(key, (char *)packet.param_id, ONBOARD_PARAM_NAME_LENGTH);
-        key[ONBOARD_PARAM_NAME_LENGTH] = 0;
+        char key[AP_MAX_NAME_SIZE+1];
+        strncpy(key, (char *)packet.param_id, AP_MAX_NAME_SIZE);
+        key[AP_MAX_NAME_SIZE] = 0;
 
         // find the requested parameter
         vp = AP_Param::find(key, &var_type);
@@ -1733,7 +1775,7 @@ void GCS_MAVLINK::handleMessage(mavlink_message_t* msg)
         current_loc.lng = g_gps->longitude;
         current_loc.lat = g_gps->latitude;
         current_loc.alt = g_gps->altitude - gps_base_alt;
-        if (!home_is_set) {
+        if (!ap.home_is_set) {
             init_home();
         }
 
@@ -1749,9 +1791,9 @@ void GCS_MAVLINK::handleMessage(mavlink_message_t* msg)
         accels.y = (float)packet.yacc / 1000.0;
         accels.z = (float)packet.zacc / 1000.0;
 
-        imu.set_gyro(gyros);
+        ins.set_gyro_offsets(gyros);
 
-        imu.set_accel(accels);
+        ins.set_accel_offsets(accels);
 
 
         // set AHRS hil sensor
@@ -1801,8 +1843,8 @@ void GCS_MAVLINK::handleMessage(mavlink_message_t* msg)
         // TODO: check scaling for temp/absPress
         float temp = 70;
         float absPress = 1;
-        //      Serial.printf_P(PSTR("accel:\t%d\t%d\t%d\n"), packet.xacc, packet.yacc, packet.zacc);
-        //      Serial.printf_P(PSTR("gyro:\t%d\t%d\t%d\n"), packet.xgyro, packet.ygyro, packet.zgyro);
+        //      cliSerial->printf_P(PSTR("accel:\t%d\t%d\t%d\n"), packet.xacc, packet.yacc, packet.zacc);
+        //      cliSerial->printf_P(PSTR("gyro:\t%d\t%d\t%d\n"), packet.xgyro, packet.ygyro, packet.zgyro);
 
         // rad/sec
         Vector3f gyros;
@@ -1815,9 +1857,9 @@ void GCS_MAVLINK::handleMessage(mavlink_message_t* msg)
         accels.y = (float)packet.yacc / 1000.0;
         accels.z = (float)packet.zacc / 1000.0;
 
-        imu.set_gyro(gyros);
+        ins.set_gyro_offsets(gyros);
 
-        imu.set_accel(accels);
+        ins.set_accel_offsets(accels);
 
         compass.setHIL(packet.xmag,packet.ymag,packet.zmag);
         break;
@@ -1968,7 +2010,7 @@ GCS_MAVLINK::queued_param_send()
     // if the parameter can be cast to float, report it here and break out of the loop
     value = vp->cast_to_float(_queued_parameter_type);
 
-    char param_name[ONBOARD_PARAM_NAME_LENGTH];
+    char param_name[AP_MAX_NAME_SIZE];
     vp->copy_name(param_name, sizeof(param_name), true);
 
     mavlink_msg_param_value_send(
@@ -2103,7 +2145,7 @@ static void gcs_send_text_P(gcs_severity severity, const prog_char_t *str)
 static void gcs_send_text_fmt(const prog_char_t *fmt, ...)
 {
     char fmtstr[40];
-    va_list ap;
+    va_list arg_list;
     uint8_t i;
     for (i=0; i<sizeof(fmtstr)-1; i++) {
         fmtstr[i] = pgm_read_byte((const prog_char *)(fmt++));
@@ -2111,9 +2153,9 @@ static void gcs_send_text_fmt(const prog_char_t *fmt, ...)
     }
     fmtstr[i] = 0;
     pending_status.severity = (uint8_t)SEVERITY_LOW;
-    va_start(ap, fmt);
-    vsnprintf((char *)pending_status.text, sizeof(pending_status.text), fmtstr, ap);
-    va_end(ap);
+    va_start(arg_list, fmt);
+    vsnprintf((char *)pending_status.text, sizeof(pending_status.text), fmtstr, arg_list);
+    va_end(arg_list);
     mavlink_send_message(MAVLINK_COMM_0, MSG_STATUSTEXT, 0);
     if (gcs3.initialised) {
         mavlink_send_message(MAVLINK_COMM_1, MSG_STATUSTEXT, 0);

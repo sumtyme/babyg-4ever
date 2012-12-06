@@ -39,6 +39,8 @@ public:
     // this
     enum GPS_Engine_Setting {
         GPS_ENGINE_NONE        = -1,
+        GPS_ENGINE_PORTABLE    = 0,
+        GPS_ENGINE_STATIONARY  = 2,
         GPS_ENGINE_PEDESTRIAN  = 3,
         GPS_ENGINE_AUTOMOTIVE  = 4,
         GPS_ENGINE_SEA         = 5,
@@ -128,6 +130,9 @@ public:
     float velocity_east(void)  {
         return _status == GPS_OK ? _velocity_east  : 0;
     }
+    float velocity_down(void)  {
+        return _status == GPS_OK ? _velocity_down  : 0;
+    }
 
     // last ground speed in m/s. This can be used when we have no GPS
     // lock to return the last ground speed we had with lock
@@ -140,6 +145,9 @@ public:
 
     // the time we got our last fix in system milliseconds
     uint32_t last_fix_time;
+
+	// return true if the GPS supports raw velocity values
+
 
 protected:
     Stream      *_port;                 ///< port the GPS is attached to
@@ -195,6 +203,8 @@ protected:
     enum GPS_Engine_Setting _nav_setting;
 
     void _write_progstr_block(Stream *_fs, const prog_char *pstr, uint8_t size);
+    void _send_progstr(Stream *_fs, const prog_char *pstr, uint8_t size);
+    void _update_progstr(void);
 
     // velocities in cm/s if available from the GPS
     int32_t _vel_north;
@@ -220,6 +230,7 @@ private:
     // components of the velocity, in m/s
     float _velocity_north;
     float _velocity_east;
+    float _velocity_down;
 };
 
 inline int32_t

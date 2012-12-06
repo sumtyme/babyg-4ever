@@ -52,6 +52,9 @@ namespace ArdupilotMega.GCSViews.ConfigurationView
 
         private void BUT_videostart_Click(object sender, EventArgs e)
         {
+            if (MainV2.MONO)
+                return;
+
             // stop first
             BUT_videostop_Click(sender, e);
 
@@ -83,6 +86,9 @@ namespace ArdupilotMega.GCSViews.ConfigurationView
 
         private void CMB_videosources_MouseClick(object sender, MouseEventArgs e)
         {
+            if (MainV2.MONO)
+                return;
+
             // the reason why i dont populate this list is because on linux/mac this call will fail.
             WebCamService.Capture capt = new WebCamService.Capture();
 
@@ -95,6 +101,9 @@ namespace ArdupilotMega.GCSViews.ConfigurationView
 
         private void CMB_videosources_SelectedIndexChanged(object sender, EventArgs e)
         {
+            if (MainV2.MONO)
+                return;
+
             int hr;
             int count;
             int size;
@@ -463,6 +472,8 @@ namespace ArdupilotMega.GCSViews.ConfigurationView
 
         private void CMB_videosources_Click(object sender, EventArgs e)
         {
+            if (MainV2.MONO)
+                return;
             // the reason why i dont populate this list is because on linux/mac this call will fail.
             WebCamService.Capture capt = new WebCamService.Capture();
 
@@ -492,7 +503,7 @@ namespace ArdupilotMega.GCSViews.ConfigurationView
             CMB_speedunits.DataSource = Enum.GetNames(typeof(Common.speeds));
 
             // setup language selection
-            var cultureCodes = new[] { "en-US", "zh-Hans", "zh-TW", "ru-RU", "Fr", "Pl", "it-IT", "es-ES" };
+            var cultureCodes = new[] { "en-US", "zh-Hans", "zh-TW", "ru-RU", "Fr", "Pl", "it-IT", "es-ES","de-DE" };
 
             _languages = cultureCodes
                 .Select(CultureInfoEx.GetCultureInfo)
@@ -507,7 +518,11 @@ namespace ArdupilotMega.GCSViews.ConfigurationView
             {
                 if (currentUiCulture.IsChildOf(_languages[i]))
                 {
-                    CMB_language.SelectedIndex = i;
+                    try
+                    {
+                        CMB_language.SelectedIndex = i;
+                    }
+                    catch { }
                     break;
                 }
             }
@@ -549,10 +564,16 @@ namespace ArdupilotMega.GCSViews.ConfigurationView
             SetCheckboxFromConfig("CHK_GDIPlus", CHK_GDIPlus);
             SetCheckboxFromConfig("CHK_maprotation", CHK_maprotation);
 
+            SetCheckboxFromConfig("CHK_disttohomeflightdata", CHK_disttohomeflightdata);
+
             //set hud color state
             string hudcolor = (string)MainV2.config["hudcolor"];
             int index = CMB_osdcolor.Items.IndexOf(hudcolor ?? "White");
-            CMB_osdcolor.SelectedIndex = index;
+            try
+            {
+                CMB_osdcolor.SelectedIndex = index;
+            }
+            catch { }
 
 
             if (MainV2.config["distunits"] != null)
@@ -567,6 +588,11 @@ namespace ArdupilotMega.GCSViews.ConfigurationView
         {
             if (MainV2.config[configKey] != null)
                 chk.Checked = bool.Parse(MainV2.config[configKey].ToString());
+        }
+
+        private void CHK_disttohomeflightdata_CheckedChanged(object sender, EventArgs e)
+        {
+            MainV2.config["CHK_disttohomeflightdata"] = CHK_disttohomeflightdata.Checked.ToString();
         }
     }
 }

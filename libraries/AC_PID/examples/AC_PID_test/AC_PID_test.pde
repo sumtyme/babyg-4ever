@@ -7,6 +7,7 @@
 #include <Arduino_Mega_ISR_Registry.h>
 #include <FastSerial.h>
 #include <AP_Common.h>
+#include <AP_Math.h>
 #include <APM_RC.h> // ArduPilot RC Library
 #include <AC_PID.h> // ArduPilot Mega RC Library
 
@@ -39,7 +40,7 @@ void setup()
 void loop()
 {
     // setup (unfortunately must be done here as we cannot create a global AC_PID object)
-    AC_PID pid(0, PSTR("TESTPID_"),  TEST_P, TEST_I, TEST_D, TEST_IMAX * 100);
+    AC_PID pid(TEST_P, TEST_I, TEST_D, TEST_IMAX * 100);
     uint16_t radio_in;
     uint16_t radio_trim;
     int error;

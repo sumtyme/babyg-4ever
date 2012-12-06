@@ -87,7 +87,7 @@
 //
 
 #if CONFIG_APM_HARDWARE == APM_HARDWARE_APM2
- # define CONFIG_IMU_TYPE   CONFIG_IMU_MPU6000
+ # define CONFIG_INS_TYPE   CONFIG_INS_MPU6000
  # define CONFIG_RELAY      DISABLED
  # define MAG_ORIENTATION   AP_COMPASS_APM2_SHIELD
  # define CONFIG_PITOT_SOURCE PITOT_SOURCE_ANALOG_PIN
@@ -116,8 +116,8 @@
  # define LED_OFF          LOW
  # define USB_MUX_PIN      -1
  # define CONFIG_RELAY     ENABLED
- # define BATTERY_PIN_1    0
- # define CURRENT_PIN_1    1
+ # define BATTERY_VOLT_PIN      0      // Battery voltage on A0
+ # define BATTERY_CURR_PIN      1      // Battery current on A1
 #elif CONFIG_APM_HARDWARE == APM_HARDWARE_APM2
  # define A_LED_PIN        27
  # define B_LED_PIN        26
@@ -129,28 +129,23 @@
  #else
   # define USB_MUX_PIN 23
  #endif
- # define BATTERY_PIN_1    1
- # define CURRENT_PIN_1    2
+ # define BATTERY_VOLT_PIN      1      // Battery voltage on A1
+ # define BATTERY_CURR_PIN      2      // Battery current on A2
 #endif
 
-
-// pin for receiver RSSI
-#ifndef RECEIVER_RSSI_PIN
-# define RECEIVER_RSSI_PIN -1
-#endif
 
 //////////////////////////////////////////////////////////////////////////////
-// IMU Selection
+// INS Selection
 //
-#ifndef CONFIG_IMU_TYPE
- # define CONFIG_IMU_TYPE CONFIG_IMU_OILPAN
+#ifndef CONFIG_INS_TYPE
+ # define CONFIG_INS_TYPE CONFIG_INS_OILPAN
 #endif
 
 //////////////////////////////////////////////////////////////////////////////
 // ADC Enable - used to eliminate for systems which don't have ADC.
 //
 #ifndef CONFIG_ADC
- # if CONFIG_IMU_TYPE == CONFIG_IMU_OILPAN
+ # if CONFIG_INS_TYPE == CONFIG_INS_OILPAN
   #   define CONFIG_ADC ENABLED
  # else
   #   define CONFIG_ADC DISABLED
@@ -191,6 +186,12 @@
 #if HIL_MODE != HIL_MODE_DISABLED       // we are in HIL mode
  # undef GPS_PROTOCOL
  # define GPS_PROTOCOL GPS_PROTOCOL_NONE
+ #undef CONFIG_ADC
+ #define CONFIG_ADC DISABLED
+ #undef CONFIG_PITOT_SOURCE
+ #define CONFIG_PITOT_SOURCE PITOT_SOURCE_ANALOG_PIN
+ #undef CONFIG_PITOT_SOURCE_ANALOG_PIN
+ #define CONFIG_PITOT_SOURCE_ANALOG_PIN -1
 #endif
 
 //////////////////////////////////////////////////////////////////////////////
@@ -237,13 +238,6 @@
 #ifndef CURR_AMP_PER_VOLT
  # define CURR_AMP_PER_VOLT              27.32  // This is the proper value for the AttoPilot 50V/90A sensor
 //# define CURR_AMP_PER_VOLT	13.66	// This is the proper value for the AttoPilot 13.6V/45A sensor
-#endif
-
-#ifndef CURR_AMPS_OFFSET
- # define CURR_AMPS_OFFSET               0.0
-#endif
-#ifndef HIGH_DISCHARGE
- # define HIGH_DISCHARGE         1760
 #endif
 
 //////////////////////////////////////////////////////////////////////////////
@@ -828,14 +822,3 @@
 # define SERIAL_BUFSIZE 256
 #endif
 
-#if CONFIG_IMU_TYPE == CONFIG_IMU_OILPAN
- # define NUM_IMU_SAMPLES_FOR_200HZ 5
- # define NUM_IMU_SAMPLES_FOR_100HZ 10
- # define NUM_IMU_SAMPLES_FOR_50HZ  20
-#endif
-
-#if CONFIG_IMU_TYPE == CONFIG_IMU_MPU6000
- # define NUM_IMU_SAMPLES_FOR_200HZ 1
- # define NUM_IMU_SAMPLES_FOR_100HZ 2
- # define NUM_IMU_SAMPLES_FOR_50HZ  4
-#endif

@@ -111,7 +111,7 @@ def fly_square(mavproxy, mav, side=50, timeout=120):
 
     print("turn")
     hover(mavproxy, mav)
-    mavproxy.send('rc 4 1610\n')
+    mavproxy.send('rc 4 1700\n')
     if not wait_heading(mav, 0):
         return False
     mavproxy.send('rc 4 1500\n')
@@ -126,7 +126,7 @@ def fly_square(mavproxy, mav, side=50, timeout=120):
     save_wp(mavproxy, mav)
 
     print("Going east %u meters" % side)
-    mavproxy.send('rc 1 1610\n')
+    mavproxy.send('rc 1 1700\n')
     if not wait_distance(mav, side):
         failed = True
     mavproxy.send('rc 1 1500\n')
@@ -135,7 +135,7 @@ def fly_square(mavproxy, mav, side=50, timeout=120):
     save_wp(mavproxy, mav)
 
     print("Going south %u meters" % side)
-    mavproxy.send('rc 2 1610\n')
+    mavproxy.send('rc 2 1700\n')
     if not wait_distance(mav, side):
         failed = True
     mavproxy.send('rc 2 1500\n')
@@ -202,10 +202,18 @@ def fly_failsafe(mavproxy, mav, side=60, timeout=180):
         home_distance = get_distance(HOME, pos)
         print("Alt: %u  HomeDistance: %.0f" % (m.alt, home_distance))
         if m.alt <= 1 and home_distance < 10:
+            # switch modes to reset out of LAND
+            mavproxy.send('switch 2\n')
+            time.sleep(1)
+            mavproxy.send('switch 6\n')
             print("Reached failsafe home OK")
             mavproxy.send('rc 3 1100\n')
             return True
     print("Failed to land on failsafe RTL - timed out after %u seconds" % timeout)
+    # switch modes to reset out of LAND
+    mavproxy.send('switch 2\n')
+    time.sleep(1)
+    mavproxy.send('switch 6\n')
     return False
 
 
@@ -220,12 +228,12 @@ def fly_simple(mavproxy, mav, side=60, timeout=120):
 
     print("# Going forward %u meters" % side)
     mavproxy.send('rc 2 1390\n')
-    if not wait_distance(mav, side, 5, 60):
+    if not wait_distance(mav, side, 10, 60):
         failed = True
     mavproxy.send('rc 2 1500\n')
 
     print("# Going east for 30 seconds")
-    mavproxy.send('rc 1 1610\n')
+    mavproxy.send('rc 1 1700\n')
     tstart = time.time()
     while time.time() < (tstart + 30):
         m = mav.recv_match(type='VFR_HUD', blocking=True)
@@ -234,8 +242,8 @@ def fly_simple(mavproxy, mav, side=60, timeout=120):
     mavproxy.send('rc 1 1500\n')
 
     print("# Going back %u meters" % side)
-    mavproxy.send('rc 2 1610\n')
-    if not wait_distance(mav, side, 5, 60):
+    mavproxy.send('rc 2 1700\n')
+    if not wait_distance(mav, side, 10, 60):
         failed = True
     mavproxy.send('rc 2 1500\n')
     #restore to default

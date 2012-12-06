@@ -12,7 +12,20 @@ namespace ArdupilotMega.Controls
     public partial class QuickView : UserControl
     {
         [System.ComponentModel.Browsable(true)]
-        public string desc { get { return labelWithPseudoOpacity1.Text; } set { if (labelWithPseudoOpacity1.Text == value) return; labelWithPseudoOpacity1.Text = value; } }
+        public string desc
+        {
+            get
+            {
+                return labelWithPseudoOpacity1.Text;
+            }
+            set
+            {
+                if (labelWithPseudoOpacity1.Text == value)
+                    return;
+                
+                labelWithPseudoOpacity1.Text = value;
+            }
+        }
         [System.ComponentModel.Browsable(true)]
         public double number { get { return double.Parse(labelWithPseudoOpacity2.Text); } 
             set { 
@@ -23,6 +36,7 @@ namespace ArdupilotMega.Controls
                 GetFontSize();
             }
         }
+
         [System.ComponentModel.Browsable(true)]
         public Color numberColor { get { return labelWithPseudoOpacity2.ForeColor; } set { if (labelWithPseudoOpacity2.ForeColor == value) return; labelWithPseudoOpacity2.ForeColor = value; } }
 
@@ -69,7 +83,7 @@ namespace ArdupilotMega.Controls
 
             Size extent = TextRenderer.MeasureText(labelWithPseudoOpacity2.Text, this.Font);
 
-            float hRatio = (this.Height) / (float)extent.Height;
+            float hRatio = (labelWithPseudoOpacity2.Height) / (float)(extent.Height);
             float wRatio = this.Width / (float)extent.Width;
             float ratio = (hRatio < wRatio) ? hRatio : wRatio;
 

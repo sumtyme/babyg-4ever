@@ -21,22 +21,6 @@ handle_process_nav_cmd()
 			do_nav_wp();
 			break;
 
-		case MAV_CMD_NAV_LAND:	// LAND to Waypoint
-			do_land();
-			break;
-
-		case MAV_CMD_NAV_LOITER_UNLIM:	// Loiter indefinitely
-			do_loiter_unlimited();
-			break;
-
-		case MAV_CMD_NAV_LOITER_TURNS:	// Loiter N Times
-			do_loiter_turns();
-			break;
-
-		case MAV_CMD_NAV_LOITER_TIME:
-			do_loiter_time();
-			break;
-
 		case MAV_CMD_NAV_RETURN_TO_LAUNCH:
 			do_RTL();
 			break;
@@ -125,13 +109,8 @@ static void handle_process_do_command()
 
 static void handle_no_commands()
 {      
-	gcs_send_text_fmt(PSTR("Returning to Home"));
-	next_nav_command = home;
-	next_nav_command.alt = read_alt_to_hold();
-	next_nav_command.id = MAV_CMD_NAV_LOITER_UNLIM;
-	nav_command_ID = MAV_CMD_NAV_LOITER_UNLIM;
-	non_nav_command_ID = WAIT_COMMAND;
-	handle_process_nav_cmd();
+	gcs_send_text_fmt(PSTR("No commands - setting MANUAL"));
+    set_mode(MANUAL);
 }
 
 /********************************************************************************/
@@ -144,36 +123,16 @@ static bool verify_nav_command()	// Returns true if command complete
 
 		case MAV_CMD_NAV_TAKEOFF:
 			return verify_takeoff();
-			break;
-
-		case MAV_CMD_NAV_LAND:
-			return verify_land();
-			break;
 
 		case MAV_CMD_NAV_WAYPOINT:
 			return verify_nav_wp();
-			break;
-
-		case MAV_CMD_NAV_LOITER_UNLIM:
-			return verify_loiter_unlim();
-			break;
-
-		case MAV_CMD_NAV_LOITER_TURNS:
-			return verify_loiter_turns();
-			break;
-
-		case MAV_CMD_NAV_LOITER_TIME:
-			return verify_loiter_time();
-			break;
 
 		case MAV_CMD_NAV_RETURN_TO_LAUNCH:
 			return verify_RTL();
-			break;
 
 		default:
 			gcs_send_text_P(SEVERITY_HIGH,PSTR("verify_nav: Invalid or no current Nav cmd"));
 			return false;
-			break;
 	}
 }
 
@@ -213,15 +172,9 @@ static bool verify_condition_command()		// Returns true if command complete
 
 static void do_RTL(void)
 {
-        prev_WP 		= current_loc;
+    prev_WP 		= current_loc;
 	control_mode 	= RTL;
-	crash_timer 	= 0;
 	next_WP 		= home;
-
-	// Altitude to hold over home
-	// Set by configuration tool
-	// -------------------------
-	next_WP.alt = read_alt_to_hold();
 }
 
 static void do_takeoff()
@@ -234,29 +187,6 @@ static void do_nav_wp()
 	set_next_WP(&next_nav_command);
 }
 
-static void do_land()
-{
-	set_next_WP(&next_nav_command);
-}
-
-static void do_loiter_unlimited()
-{
-	set_next_WP(&next_nav_command);
-}
-
-static void do_loiter_turns()
-{
-	set_next_WP(&next_nav_command);
-	loiter_total = next_nav_command.p1 * 360;
-}
-
-static void do_loiter_time()
-{
-	set_next_WP(&next_nav_command);
-	loiter_time = millis();
-	loiter_time_max = next_nav_command.p1; // units are (seconds * 10)
-}
-
 /********************************************************************************/
 //  Verify Nav (Must) commands
 /********************************************************************************/
@@ -264,75 +194,42 @@ static bool verify_takeoff()
 {  return true;
 }
 
-static bool verify_land()
-{
-}
-
 static void calc_turn_radius(void)    // JLN update - adjut automaticaly the wp_radius Vs the speed and the turn angle
 {
   wp_radius = ground_speed * 150 / g.roll_limit.get();
-  //Serial.println(wp_radius, DEC);
+  //cliSerial->println(wp_radius, DEC);
 }
 
 
 static bool verify_nav_wp()
 {
-	hold_course = -1;
-	update_crosstrack();
+    update_crosstrack();
 
-        if(g.auto_wp_radius) 
-        { 
-            calc_turn_radius();  // JLN update - auto-adap the wp_radius Vs the gspeed and max roll angle
+    if ((wp_distance > 0) && (wp_distance <= g.waypoint_radius)) {
+        gcs_send_text_fmt(PSTR("Reached Waypoint #%i dist %um"),
+                          (unsigned)nav_command_index,
+                          (unsigned)get_distance(&current_loc, &next_WP));
+        return true;
+    }
 
-          if ((wp_distance > 0) && (wp_distance <= wp_radius)) {
-		gcs_send_text_fmt(PSTR("Reached Waypoint #%i"),nav_command_index);
-		return true;
-	  }
-        } else {
-	  if ((wp_distance > 0) && (wp_distance <= g.waypoint_radius)) {
-		gcs_send_text_fmt(PSTR("Reached Waypoint #%i"),nav_command_index);
-		return true;
-	  }
+    if(g.auto_wp_radius) { 
+        calc_turn_radius();  // JLN update - auto-adap the wp_radius Vs the gspeed and max roll angle
+
+        if ((wp_distance > 0) && (wp_distance <= wp_radius)) {
+            gcs_send_text_fmt(PSTR("Reached Waypoint #%i"),nav_command_index);
+            return true;
         }
-       
-	// add in a more complex case
-	// Doug to do
-	if(loiter_sum > 300){
-		gcs_send_text_P(SEVERITY_MEDIUM,PSTR("Missed WP"));
-		return true;
-	}
-	return false;
-}
+    }
 
-static bool verify_loiter_unlim()
-{
-	update_loiter();
-	calc_bearing_error();
-	return false;
-}
+    // have we gone past the waypoint?
+    if (location_passed_point(current_loc, prev_WP, next_WP)) {
+        gcs_send_text_fmt(PSTR("Passed Waypoint #%i dist %um"),
+                          (unsigned)nav_command_index,
+                          (unsigned)get_distance(&current_loc, &next_WP));
+        return true;
+    }
 
-static bool verify_loiter_time()
-{
-	update_loiter();
-	calc_bearing_error();
-	if ((millis() - loiter_time) > (unsigned long)loiter_time_max * 10000l) {		// scale loiter_time_max from (sec*10) to milliseconds
-		gcs_send_text_P(SEVERITY_LOW,PSTR("verify_nav: LOITER time complete"));
-		return true;
-	}
-	return false;
-}
-
-static bool verify_loiter_turns()
-{
-	update_loiter();
-	calc_bearing_error();
-	if(loiter_sum > loiter_total) {
-		loiter_total = 0;
-		gcs_send_text_P(SEVERITY_LOW,PSTR("verify_nav: LOITER orbits complete"));
-		// clear the command queue;
-		return true;
-	}
-	return false;
+    return false;
 }
 
 static bool verify_RTL()
@@ -361,9 +258,7 @@ static void do_change_alt()
 	condition_rate		= abs((int)next_nonnav_command.lat);
 	condition_value 	= next_nonnav_command.alt;
 	if(condition_value < current_loc.alt) condition_rate = -condition_rate;
-	target_altitude		= current_loc.alt + (condition_rate / 10);		// Divide by ten for 10Hz update
 	next_WP.alt 		= condition_value;								// For future nav calculations
-	offset_altitude 	= 0;											// For future nav calculations
 }
 
 static void do_within_distance()
@@ -377,7 +272,7 @@ static void do_within_distance()
 
 static bool verify_wait_delay()
 {
-	if ((unsigned)(millis() - condition_start) > condition_value){
+	if ((uint32_t)(millis() - condition_start) > (uint32_t)condition_value){
 		condition_value 	= 0;
 		return true;
 	}
@@ -390,7 +285,6 @@ static bool verify_change_alt()
 		condition_value = 0;
 		return true;
 	}
-	target_altitude += condition_rate / 10;
 	return false;
 }
 
@@ -406,11 +300,6 @@ static bool verify_within_distance()
 /********************************************************************************/
 //  Do (Now) commands
 /********************************************************************************/
-
-static void do_loiter_at_location()
-{
-	next_WP = current_loc;
-}
 
 static void do_jump()
 {
@@ -461,7 +350,7 @@ static void do_change_speed()
 
 static void do_set_home()
 {
-	if(next_nonnav_command.p1 == 1 && g_gps->status() == GPS::GPS_OK) {
+	if(next_nonnav_command.p1 == 1 && have_position) {
 		init_home();
 	} else {
 		home.id 	= MAV_CMD_NAV_WAYPOINT;

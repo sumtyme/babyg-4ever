@@ -68,7 +68,7 @@ public:
         k_param_reset_switch_chan,
         k_param_manual_level,
         k_param_land_pitch_cd,
-        k_param_ins,
+        k_param_ins_old,            // *** Deprecated, remove with next eeprom number change
         k_param_stick_mixing,
         k_param_reset_mission_chan,
         k_param_land_flare_alt,
@@ -77,6 +77,7 @@ public:
         k_param_rudder_steer,
         k_param_throttle_nudge,
         k_param_alt_offset,
+        k_param_ins,                // libraries/AP_InertialSensor variables
 
         // 110: Telemetry control
         //
@@ -98,7 +99,7 @@ public:
         //
         // 130: Sensor parameters
         //
-        k_param_imu = 130,  // sensor calibration
+        k_param_imu = 130,  // unused
         k_param_altitude_mix,
 
         k_param_compass_enabled,
@@ -112,6 +113,7 @@ public:
         k_param_ahrs,  // AHRS group
         k_param_barometer,   // barometer ground calibration
         k_param_airspeed,  // AP_Airspeed parameters
+        k_param_curr_amp_offset,
 
         //
         // 150: Navigation parameters
@@ -134,6 +136,13 @@ public:
         k_param_camera = 160,
         k_param_camera_mount,
         k_param_camera_mount2,
+
+        //
+        // Battery monitoring parameters
+        //
+        k_param_rssi_pin = 167,
+        k_param_battery_volt_pin,
+        k_param_battery_curr_pin,   // 169
 
         //
         // 170: Radio settings
@@ -161,6 +170,7 @@ public:
         k_param_gcs_heartbeat_fs_enabled,
         k_param_throttle_slewrate,
         k_param_throttle_suppress_manual,
+        k_param_throttle_passthru_stabilize,
 
         //
         // 200: Feed-forward gains
@@ -277,6 +287,7 @@ public:
     AP_Int8 throttle_max;
     AP_Int8 throttle_slewrate;
     AP_Int8 throttle_suppress_manual;
+    AP_Int8 throttle_passthru_stabilize;
     AP_Int8 throttle_fs_enabled;
     AP_Int16 throttle_fs_value;
     AP_Int8 throttle_cruise;
@@ -333,8 +344,12 @@ public:
     AP_Int8 flap_2_speed;
     AP_Float volt_div_ratio;
     AP_Float curr_amp_per_volt;
+    AP_Float curr_amp_offset;
     AP_Float input_voltage;
     AP_Int32 pack_capacity;                     // Battery pack capacity less reserve
+    AP_Int8 rssi_pin;
+    AP_Int8 battery_volt_pin;
+    AP_Int8 battery_curr_pin;
     AP_Int8 inverted_flight_ch;             // 0=disabled, 1-8 is channel for inverted flight trigger
     AP_Int8 stick_mixing;
     AP_Int8 rudder_steer;

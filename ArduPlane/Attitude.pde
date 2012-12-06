@@ -97,7 +97,8 @@ static void stabilize()
     // Mix Stick input to allow users to override control surfaces
     // -----------------------------------------------------------
     if (stick_mixing_enabled()) {
-        if (control_mode < FLY_BY_WIRE_A || control_mode > FLY_BY_WIRE_C) {
+        if (control_mode != FLY_BY_WIRE_A && 
+            control_mode != FLY_BY_WIRE_B) {
             // do stick mixing on aileron/elevator if not in a fly by
             // wire mode
             ch1_inf = (float)g.channel_roll.radio_in - (float)g.channel_roll.radio_trim;
@@ -207,7 +208,7 @@ static void calc_nav_yaw(float speed_scaler, float ch4_inf)
     g.channel_rudder.servo_out = g.kff_rudder_mix * g.channel_roll.servo_out;
 
     // a PID to coordinate the turn (drive y axis accel to zero)
-    Vector3f temp = imu.get_accel();
+    Vector3f temp = ins.get_accel();
     int32_t error = -temp.y*100.0;
 
     g.channel_rudder.servo_out += g.pidServoRudder.get_pid(error, speed_scaler);
@@ -281,14 +282,17 @@ static void calc_nav_roll()
 /*****************************************
 * Throttle slew limit
 *****************************************/
-static void throttle_slew_limit()
+static void throttle_slew_limit(int16_t last_throttle)
 {
-    static int16_t last = 1000;
-    if(g.throttle_slewrate) {                   // if slew limit rate is set to zero then do not slew limit
-
-        float temp = g.throttle_slewrate * G_Dt * 10.f;                 //  * 10 to scale % to pwm range of 1000 to 2000
-        g.channel_throttle.radio_out = constrain(g.channel_throttle.radio_out, last - (int)temp, last + (int)temp);
-        last = g.channel_throttle.radio_out;
+    // if slew limit rate is set to zero then do not slew limit
+    if (g.throttle_slewrate) {                   
+        // limit throttle change by the given percentage per second
+        float temp = g.throttle_slewrate * G_Dt * 0.01 * fabs(g.channel_throttle.radio_max - g.channel_throttle.radio_min);
+        // allow a minimum change of 1 PWM per cycle
+        if (temp < 1) {
+            temp = 1;
+        }
+        g.channel_throttle.radio_out = constrain(g.channel_throttle.radio_out, last_throttle - temp, last_throttle + temp);
     }
 }
 
@@ -346,6 +350,7 @@ static bool suppress_throttle(void)
 static void set_servos(void)
 {
     int16_t flapSpeedSource = 0;
+    int16_t last_throttle = g.channel_throttle.radio_out;
 
     if(control_mode == MANUAL) {
         // do a direct pass through of radio values
@@ -358,27 +363,65 @@ static void set_servos(void)
         }
         g.channel_throttle.radio_out    = g.channel_throttle.radio_in;
         g.channel_rudder.radio_out              = g.channel_rudder.radio_in;
-        // FIXME To me it does not make sense to control the aileron using radio_in in manual mode
-        // Doug could you please take a look at this ?
-        RC_Channel_aux::copy_radio_in_out(RC_Channel_aux::k_aileron);
+
+        // setup extra aileron channel. We want this to come from the
+        // main aileron input channel, but using the 2nd channels dead
+        // zone, reverse and min/max settings. We need to use
+        // pwm_to_angle_dz() to ensure we don't trim the value for the
+        // deadzone of the main aileron channel, otherwise the 2nd
+        // aileron won't quite follow the first one
+        int16_t aileron_in = g.channel_roll.pwm_to_angle_dz(0);
+        RC_Channel_aux::set_servo_out(RC_Channel_aux::k_aileron, aileron_in);
+
+        // this aileron variant assumes you have the corresponding
+        // input channel setup in your transmitter for manual control
+        // of the 2nd aileron
+        RC_Channel_aux::copy_radio_in_out(RC_Channel_aux::k_aileron_with_input);
+
+        // copy flap control from transmitter
         RC_Channel_aux::copy_radio_in_out(RC_Channel_aux::k_flap_auto);
+
+        if (g.mix_mode != 0) {
+            // set any differential spoilers to follow the elevons in
+            // manual mode. 
+            RC_Channel_aux::set_radio(RC_Channel_aux::k_dspoiler1, g.channel_roll.radio_out);
+            RC_Channel_aux::set_radio(RC_Channel_aux::k_dspoiler2, g.channel_pitch.radio_out);
+        }
     } else {
         if (g.mix_mode == 0) {
+            // both types of secondary aileron are slaved to the roll servo out
             RC_Channel_aux::set_servo_out(RC_Channel_aux::k_aileron, g.channel_roll.servo_out);
+            RC_Channel_aux::set_servo_out(RC_Channel_aux::k_aileron_with_input, g.channel_roll.servo_out);
         }else{
             /*Elevon mode*/
             float ch1;
             float ch2;
             ch1 = g.channel_pitch.servo_out - (BOOL_TO_SIGN(g.reverse_elevons) * g.channel_roll.servo_out);
             ch2 = g.channel_pitch.servo_out + (BOOL_TO_SIGN(g.reverse_elevons) * g.channel_roll.servo_out);
+
+			/* Differential Spoilers
+               If differential spoilers are setup, then we translate
+               rudder control into splitting of the two ailerons on
+               the side of the aircraft where we want to induce
+               additional drag.
+             */
+			if (RC_Channel_aux::function_assigned(RC_Channel_aux::k_dspoiler1) && RC_Channel_aux::function_assigned(RC_Channel_aux::k_dspoiler2)) {
+				float ch3 = ch1;
+				float ch4 = ch2;
+				if ( BOOL_TO_SIGN(g.reverse_elevons) * g.channel_rudder.servo_out < 0) {
+				    ch1 += abs(g.channel_rudder.servo_out);
+				    ch3 -= abs(g.channel_rudder.servo_out);
+				} else {
+					ch2 += abs(g.channel_rudder.servo_out);
+				    ch4 -= abs(g.channel_rudder.servo_out);
+				}
+				RC_Channel_aux::set_servo_out(RC_Channel_aux::k_dspoiler1, ch3);
+				RC_Channel_aux::set_servo_out(RC_Channel_aux::k_dspoiler2, ch4);
+			}
+
+            // directly set the radio_out values for elevon mode
             g.channel_roll.radio_out  =     elevon1_trim + (BOOL_TO_SIGN(g.reverse_ch1_elevon) * (ch1 * 500.0/ SERVO_MAX));
             g.channel_pitch.radio_out =     elevon2_trim + (BOOL_TO_SIGN(g.reverse_ch2_elevon) * (ch2 * 500.0/ SERVO_MAX));
-        }
-
-        if (control_mode >= FLY_BY_WIRE_B) {
-            /* only do throttle slew limiting in modes where throttle
-             *  control is automatic */
-            throttle_slew_limit();
         }
 
 #if OBC_FAILSAFE == ENABLED
@@ -410,6 +453,7 @@ static void set_servos(void)
                                                  g.throttle_max.get());
 
         if (suppress_throttle()) {
+            // throttle is suppressed in auto mode
             g.channel_throttle.servo_out = 0;
             if (g.throttle_suppress_manual) {
                 // manual pass through of throttle while throttle is suppressed
@@ -417,7 +461,13 @@ static void set_servos(void)
             } else {
                 g.channel_throttle.calc_pwm();                
             }
+        } else if (g.throttle_passthru_stabilize && 
+                   (control_mode == STABILIZE || control_mode == FLY_BY_WIRE_A)) {
+            // manual pass through of throttle while in FBWA or
+            // STABILIZE mode with THR_PASS_STAB set
+            g.channel_throttle.radio_out = g.channel_throttle.radio_in;
         } else {
+            // normal throttle calculation based on servo_out
             g.channel_throttle.calc_pwm();
         }
 #endif
@@ -444,6 +494,12 @@ static void set_servos(void)
         }
     }
 
+    if (control_mode >= FLY_BY_WIRE_B) {
+        /* only do throttle slew limiting in modes where throttle
+         *  control is automatic */
+        throttle_slew_limit(last_throttle);
+    }
+
 #if HIL_MODE == HIL_MODE_DISABLED || HIL_SERVOS
     // send values to the PWM timers for output
     // ----------------------------------------
@@ -464,10 +520,13 @@ static void set_servos(void)
 #endif
 }
 
+static bool demoing_servos;
+
 static void demo_servos(byte i) {
 
     while(i > 0) {
         gcs_send_text_P(SEVERITY_LOW,PSTR("Demo Servos!"));
+        demoing_servos = true;
 #if HIL_MODE == HIL_MODE_DISABLED || HIL_SERVOS
         APM_RC.OutputCh(1, 1400);
         mavlink_delay(400);
@@ -475,6 +534,7 @@ static void demo_servos(byte i) {
         mavlink_delay(200);
         APM_RC.OutputCh(1, 1500);
 #endif
+        demoing_servos = false;
         mavlink_delay(400);
         i--;
     }

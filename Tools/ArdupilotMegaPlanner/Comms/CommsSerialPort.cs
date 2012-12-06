@@ -4,11 +4,38 @@ using System.Text;
 using System.IO.Ports;
 using System.IO;
 using System.Linq;
+using System.Management;
+using ArdupilotMega.Utilities;
+using System.Reflection;
 
 namespace ArdupilotMega.Comms
 {
     public class SerialPort : System.IO.Ports.SerialPort,ICommsSerial
     {
+        static bool serialportproblem = false;
+
+        protected override void Dispose(bool disposing)
+        {
+            try
+            {
+                try
+                {
+                    Type mytype = typeof(System.IO.Ports.SerialPort);
+                    FieldInfo field = mytype.GetField("internalSerialStream", BindingFlags.Instance | BindingFlags.NonPublic);
+                    Stream stream = (Stream)field.GetValue(this);
+
+                    if (stream != null)
+                    {
+                        stream.Dispose();
+                    }
+                }
+                catch { }
+
+                base.Dispose(disposing);
+            }
+            catch { }
+        }
+
         public new void Open()
         {
             // 500ms write timeout - win32 api default
@@ -64,6 +91,34 @@ namespace ArdupilotMega.Comms
             return allPorts.ToArray();
         }
 
+        internal static string GetNiceName(string port)
+        {
+            if (serialportproblem)
+                return "";
+
+            DateTime start = DateTime.Now;
+            try
+            {
+                ObjectQuery query = new ObjectQuery("SELECT * FROM Win32_SerialPort"); // Win32_USBControllerDevice
+                ManagementObjectSearcher searcher = new ManagementObjectSearcher(query);
+                foreach (ManagementObject obj2 in searcher.Get())
+                {
+                    //DeviceID                     
+                    if (obj2.Properties["DeviceID"].Value.ToString().ToUpper() == port.ToUpper())
+                    {
+                        DateTime end = DateTime.Now;
+
+                        if ((end - start).TotalSeconds > 5)
+                            serialportproblem = true;
+
+                        return obj2.Properties["Name"].Value.ToString();
+                    }
+                }
+            }
+            catch { }
+
+            return "";
+        }
 
         // .NET bug: sometimes bluetooth ports are enumerated with bogus characters 
         // eg 'COM10' becomes 'COM10c' - one workaround is to remove the non numeric  

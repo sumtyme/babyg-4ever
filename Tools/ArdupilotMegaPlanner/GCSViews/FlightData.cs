@@ -19,7 +19,7 @@ using System.Drawing.Drawing2D;
 using ArdupilotMega.Controls;
 using ArdupilotMega.Utilities;
 using ArdupilotMega.Controls.BackstageView;
-using Crom.Controls.Docking;
+//using Crom.Controls.Docking;
 using log4net;
 using System.Reflection;
 
@@ -30,7 +30,6 @@ namespace ArdupilotMega.GCSViews
     {
         private static readonly ILog log = LogManager.GetLogger(MethodBase.GetCurrentMethod().DeclaringType);
 
-        ArdupilotMega.MAVLink comPort = MainV2.comPort;
         public static int threadrun = 0;
         StreamWriter swlog;
         int tickStart = 0;
@@ -75,7 +74,7 @@ namespace ArdupilotMega.GCSViews
         bool huddropout = false;
         bool huddropoutresize = false;
 
-        private DockStateSerializer _serializer = null;
+        //      private DockStateSerializer _serializer = null;
 
         List<PointLatLng> trackPoints = new List<PointLatLng>();
 
@@ -89,6 +88,8 @@ namespace ArdupilotMega.GCSViews
         bool playingLog = false;
         double LogPlayBackSpeed = 1.0;
 
+        GMapMarker marker;
+
         AviWriter aviwriter;
 
         public SplitContainer MainHcopy = null;
@@ -99,17 +100,11 @@ namespace ArdupilotMega.GCSViews
         {
             threadrun = 0;
             MainV2.comPort.logreadmode = false;
-            MainV2.config["FlightSplitter"] = hud1.Width;
-            if (!MainV2.MONO)
+            try
             {
-                try
-                {
-                    log.Info("Saving Screen Layout");
-                    _serializer.Save();
-                }
-                catch (Exception ex) { log.Error(ex); }
-                SaveWindowLayout();
+                MainV2.config["FlightSplitter"] = hud1.Width;
             }
+            catch { }
             System.Threading.Thread.Sleep(100);
             base.Dispose(disposing);
         }
@@ -119,10 +114,10 @@ namespace ArdupilotMega.GCSViews
             InitializeComponent();
 
             instance = this;
-            _serializer = new DockStateSerializer(dockContainer1);
-            _serializer.SavePath = Application.StartupPath + Path.DirectorySeparatorChar + "FDscreen.xml";
-            dockContainer1.PreviewRenderer = new PreviewRenderer();
-
+            //    _serializer = new DockStateSerializer(dockContainer1);
+            //    _serializer.SavePath = Application.StartupPath + Path.DirectorySeparatorChar + "FDscreen.xml";
+            //    dockContainer1.PreviewRenderer = new PreviewRenderer();
+            //
             mymap = gMapControl1;
             myhud = hud1;
             MainHcopy = MainH;
@@ -143,24 +138,6 @@ namespace ArdupilotMega.GCSViews
                 chk_box_CheckedChanged((object)(new CheckBox() { Name = "pitch", Checked = true }), new EventArgs());
                 chk_box_CheckedChanged((object)(new CheckBox() { Name = "nav_roll", Checked = true }), new EventArgs());
                 chk_box_CheckedChanged((object)(new CheckBox() { Name = "nav_pitch", Checked = true }), new EventArgs());
-            }
-
-            for (int f = 1; f < 10; f++)
-            {
-                // load settings
-                if (MainV2.config["quickView" + f] != null)
-                {
-                    Control[] ctls = this.Controls.Find("quickView" + f, true);
-                    if (ctls.Length > 0)
-                    {
-                        // set description
-                        ((QuickView)ctls[0]).desc = MainV2.config["quickView" + f].ToString();
-
-                        // set databinding for value
-                        ((QuickView)ctls[0]).DataBindings.Clear();
-                        ((QuickView)ctls[0]).DataBindings.Add(new System.Windows.Forms.Binding("number", this.bindingSource1, MainV2.config["quickView" + f].ToString(), true));
-                    }
-                }
             }
 
             foreach (string item in MainV2.config.Keys)
@@ -239,263 +216,12 @@ namespace ArdupilotMega.GCSViews
             }
             catch { }
 
-            if (MainV2.MONO)
-            {
-                MainH.Dock = DockStyle.Fill;
-                MainH.Visible = true;
-            }
-            else
-            {
-                log.Info("1-"+ DateTime.Now);
-                SetupDocking();
-                log.Info("2-" + DateTime.Now);
-                if (File.Exists(_serializer.SavePath) == true )
-                {
-                    FileInfo fi = new FileInfo(_serializer.SavePath);
-
-                    if (fi.Length > 500)
-                    {
-                        try
-                        {
-                            _serializer.Load(true, GetFormFromGuid);
-                            log.Info("3-" + DateTime.Now);
-                        }
-                        catch (Exception ex)
-                        {
-                            log.Info(ex);
-                            try
-                            {
-                                SetupDocking();
-                            }
-                            catch (Exception ex2)
-                            {
-                                log.Info(ex2);
-                            }
-                        }
-                    }
-                }
-                log.Info("D-" + DateTime.Now);
-            }
         }
-
-        void SetupDocking()
-        {
-            this.SuspendLayout();
-
-            DockableFormInfo dockhud = CreateFormAndGuid(dockContainer1, hud1, "fd_hud_guid");
-            DockableFormInfo dockmap = CreateFormAndGuid(dockContainer1, tableMap, "fd_map_guid");
-            DockableFormInfo dockquick = CreateFormAndGuid(dockContainer1, tabQuick, "fd_quick_guid");
-            DockableFormInfo dockactions = CreateFormAndGuid(dockContainer1, tabActions, "fd_actions_guid");
-            DockableFormInfo dockguages = CreateFormAndGuid(dockContainer1, tabGauges, "fd_guages_guid");
-            DockableFormInfo dockstatus = CreateFormAndGuid(dockContainer1, tabStatus, "fd_status_guid");
-            DockableFormInfo docktlogs = CreateFormAndGuid(dockContainer1, tabTLogs, "fd_tlogs_guid");
-
-            dockContainer1.DockForm(dockmap, DockStyle.Fill, zDockMode.Outer);
-            dockContainer1.DockForm(dockquick, DockStyle.Right, zDockMode.Outer);
-            dockContainer1.DockForm(dockhud, DockStyle.Left, zDockMode.Outer);
-
-            dockContainer1.DockForm(dockactions, dockhud, DockStyle.Bottom, zDockMode.Outer);
-            dockContainer1.DockForm(dockguages, dockactions, DockStyle.Fill, zDockMode.Inner);
-            dockContainer1.DockForm(dockstatus, dockactions, DockStyle.Fill, zDockMode.Inner);
-            dockContainer1.DockForm(docktlogs, dockactions, DockStyle.Fill, zDockMode.Inner);
-
-            dockactions.IsSelected = true;
-
-            if (MainV2.config["FlightSplitter"] != null)
-            {
-                dockContainer1.SetWidth(dockhud, int.Parse(MainV2.config["FlightSplitter"].ToString()));
-            }
-
-            dockContainer1.SetHeight(dockhud, hud1.Height);
-
-            dockContainer1.SetWidth(dockguages, 110);
-
-            this.ResumeLayout();
-        }
-
-        void cleanupDocks()
-        {
-            // cleanup from load
-            for (int a = 0; a < dockContainer1.Count; a++)
-            {
-                DockableFormInfo info = dockContainer1.GetFormInfoAt(a);
-
-                info.ShowCloseButton = false;
-
-                info.ShowContextMenuButton = false;
-            }
-        }
-
-        void SaveWindowLayout()
-        {
-            XmlTextWriter xmlwriter = new XmlTextWriter(Path.GetDirectoryName(Application.ExecutablePath) + Path.DirectorySeparatorChar + @"FDLayout.xml", Encoding.ASCII);
-            xmlwriter.Formatting = Formatting.Indented;
-
-            xmlwriter.WriteStartDocument();
-
-            xmlwriter.WriteStartElement("ScreenLayout");
-
-            //xmlwriter.WriteElementString("comport", comPortName);
-
-
-            for (int a = 0; a < dockContainer1.Count; a++)
-            {
-                DockableFormInfo info = dockContainer1.GetFormInfoAt(a);
-
-                xmlwriter.WriteStartElement("Form");
-
-                object thisBoxed = info;
-                Type test = thisBoxed.GetType();
-
-                foreach (var field in test.GetProperties())
-                {
-                    // field.Name has the field's name.
-                    object fieldValue;
-                    try
-                    {
-                        fieldValue = field.GetValue(thisBoxed, null); // Get value
-                    }
-                    catch { continue; }
-
-                    // Get the TypeCode enumeration. Multiple types get mapped to a common typecode.
-                    TypeCode typeCode = Type.GetTypeCode(fieldValue.GetType());
-
-                    xmlwriter.WriteElementString(field.Name, fieldValue.ToString());
-                }
-
-                thisBoxed = info.DockableForm;
-                test = thisBoxed.GetType();
-
-                foreach (var field in test.GetProperties())
-                {
-                    // field.Name has the field's name.
-                    object fieldValue;
-                    try
-                    {
-                        fieldValue = field.GetValue(thisBoxed, null); // Get value
-
-
-                        // Get the TypeCode enumeration. Multiple types get mapped to a common typecode.
-                        TypeCode typeCode = Type.GetTypeCode(fieldValue.GetType());
-
-                        xmlwriter.WriteElementString(field.Name, fieldValue.ToString());
-                    }
-                    catch { continue; }
-                }
-
-                // DockableContainer dockcont = info as DockableContainer;
-
-                // dockContainer1.
-
-                xmlwriter.WriteEndElement();
-            }
-
-            xmlwriter.WriteEndElement();
-
-            xmlwriter.WriteEndDocument();
-            xmlwriter.Close();
-        }
-
-        DockableFormInfo CreateFormAndGuid(DockContainer dock, Control ctl, string configguidref)
-        {
-            Guid gu = GetOrCreateGuid(configguidref);
-            Form frm;
-
-            if (formguids.ContainsKey(gu) && !formguids[gu].IsDisposed)
-            {
-                frm = formguids[gu];
-            }
-            else
-            {
-                frm = CreateFormFromControl(ctl);
-                frm.AutoScroll = true;
-                formguids[gu] = frm;
-            }
-
-            frm.FormBorderStyle = FormBorderStyle.SizableToolWindow;
-            frm.TopLevel = false;
-
-            DockableFormInfo answer = dock.Add(frm, Crom.Controls.Docking.zAllowedDock.All, gu);
-
-            answer.ShowCloseButton = false;
-
-            answer.ShowContextMenuButton = false;
-
-            return answer;
-        }
-
-        Guid GetOrCreateGuid(string configname)
-        {
-            if (!MainV2.config.ContainsKey(configname))
-            {
-                MainV2.config[configname] = Guid.NewGuid().ToString();
-            }
-
-            return new Guid(MainV2.config[configname].ToString());
-        }
-
-        Form GetFormFromGuid(Guid id)
-        {
-            return formguids[id];
-        }
-
-        Form CreateFormFromControl(Control ctl)
-        {
-            ctl.Dock = DockStyle.Fill;
-            Form newform = new Form();
-            System.ComponentModel.ComponentResourceManager resources = new System.ComponentModel.ComponentResourceManager(typeof(MainV2));
-            newform.Icon = ((System.Drawing.Icon)(resources.GetObject("$this.Icon")));
-            try
-            {
-                if (ctl is TabPage)
-                {
-                    TabPage tp = ctl as TabPage;
-                    newform.Text = ctl.Text;
-                    while (tp.Controls.Count > 0)
-                    {
-                        newform.Controls.Add(tp.Controls[0]);
-                    }
-                    if (tp == tabQuick)
-                    {
-                        newform.Resize += tabQuick_Resize;
-                    }
-                    if (tp == tabStatus)
-                    {
-                        newform.Resize += tabStatus_Resize;
-                        newform.Load += tabStatus_Resize;
-                        //newform.Resize += tab1
-                    }
-                    if (tp == tabGauges)
-                    {
-                        newform.Resize += tabPage1_Resize;
-                    }
-                }
-                else if (ctl is Form)
-                {
-                    return (Form)ctl;
-                }
-                else
-                {
-                    newform.Text = ctl.Text;
-                    newform.Controls.Add(ctl);
-                    if (ctl is HUD)
-                    {
-                        newform.Text = "Hud";
-                    }
-                    if (ctl is myGMAP)
-                    {
-                        newform.Text = "Map";
-                    }
-                }
-            }
-            catch { }
-            return newform;
-        }
-
+   
         void tabStatus_Resize(object sender, EventArgs e)
         {
             // localise it
-            Control tabStatus = sender as Control;
+            //Control tabStatus = sender as Control;
 
             //  tabStatus.SuspendLayout();
 
@@ -581,6 +307,8 @@ namespace ArdupilotMega.GCSViews
 
             tabStatus.Width = x;
 
+            ThemeManager.ApplyThemeTo(tabStatus);
+
             //   tabStatus.ResumeLayout();
         }
 
@@ -597,6 +325,46 @@ namespace ArdupilotMega.GCSViews
                     hud1.Enabled = true;
 
                 hud1.Dock = DockStyle.Fill;
+            }
+
+            for (int f = 1; f < 10; f++)
+            {
+                // load settings
+                if (MainV2.config["quickView" + f] != null)
+                {
+                    Control[] ctls = this.Controls.Find("quickView" + f, true);
+                    if (ctls.Length > 0)
+                    {
+                        // set description
+                        ((QuickView)ctls[0]).desc = MainV2.cs.GetNameandUnit(MainV2.config["quickView" + f].ToString());
+
+                        // set databinding for value
+                        ((QuickView)ctls[0]).DataBindings.Clear();
+                        ((QuickView)ctls[0]).DataBindings.Add(new System.Windows.Forms.Binding("number", this.bindingSource1, MainV2.config["quickView" + f].ToString(), true));
+                    }
+                }
+                else
+                {
+                    // if no config, update description on predefined
+                    try
+                    {
+                          Control[] ctls = this.Controls.Find("quickView" + f, true);
+                          if (ctls.Length > 0)
+                          {
+                              ((QuickView)ctls[0]).desc = MainV2.cs.GetNameandUnit(((QuickView)ctls[0]).desc);
+                          }
+                    }
+                    catch { }
+                }
+            }
+
+            if (MainV2.comPort.param.ContainsKey("BATT_MONITOR") && (float)MainV2.comPort.param["BATT_MONITOR"] != 0)
+            {
+                hud1.batteryon = true;
+            }
+            else
+            {
+                hud1.batteryon = false;
             }
 
             foreach (Control ctl in splitContainer1.Panel2.Controls)
@@ -641,6 +409,7 @@ namespace ArdupilotMega.GCSViews
 
         void gMapControl1_OnMapZoomChanged()
         {
+            TRK_zoom.Value = gMapControl1.Zoom;
             Zoomlevel.Value = Convert.ToDecimal(gMapControl1.Zoom);
         }
 
@@ -655,12 +424,23 @@ namespace ArdupilotMega.GCSViews
             t11.Start();
             //MainH.threads.Add(t11);
 
+            TRK_zoom.Minimum = gMapControl1.MinZoom;
+            TRK_zoom.Maximum = gMapControl1.MaxZoom + 1;
+            TRK_zoom.Value = gMapControl1.Zoom;
+
             Zoomlevel.Minimum = gMapControl1.MinZoom;
             Zoomlevel.Maximum = gMapControl1.MaxZoom + 1;
             Zoomlevel.Value = Convert.ToDecimal(gMapControl1.Zoom);
 
             if (MainV2.config["CHK_autopan"] != null)
                 CHK_autopan.Checked = bool.Parse(MainV2.config["CHK_autopan"].ToString());
+
+            if (MainV2.config.Contains("FlightSplitter"))
+            {
+                //  hud1.Width = int.Parse(MainV2.config["FlightSplitter"].ToString());
+                //  MainH.PerformLayout();
+                MainH.SplitterDistance = int.Parse(MainV2.config["FlightSplitter"].ToString());
+            }
         }
 
         private void mainloop()
@@ -699,10 +479,10 @@ namespace ArdupilotMega.GCSViews
                     System.Threading.Thread.Sleep(50);
                     continue;
                 }
-                if (!comPort.BaseStream.IsOpen)
+                if (!MainV2.comPort.BaseStream.IsOpen)
                     lastdata = DateTime.Now;
                 // re-request servo data
-                if (!(lastdata.AddSeconds(8) > DateTime.Now) && comPort.BaseStream.IsOpen)
+                if (!(lastdata.AddSeconds(8) > DateTime.Now) && MainV2.comPort.BaseStream.IsOpen)
                 {
                     //Console.WriteLine("REQ streams - flightdata");
                     try
@@ -710,15 +490,15 @@ namespace ArdupilotMega.GCSViews
                         //System.Threading.Thread.Sleep(1000);
 
                         //comPort.requestDatastream((byte)ArdupilotMega.MAVLink09.MAV_DATA_STREAM.RAW_CONTROLLER, 0); // request servoout
-                        comPort.requestDatastream((byte)ArdupilotMega.MAVLink.MAV_DATA_STREAM.EXTENDED_STATUS, MainV2.cs.ratestatus); // mode
-                        comPort.requestDatastream((byte)ArdupilotMega.MAVLink.MAV_DATA_STREAM.POSITION, MainV2.cs.rateposition); // request gps
-                        comPort.requestDatastream((byte)ArdupilotMega.MAVLink.MAV_DATA_STREAM.EXTRA1, MainV2.cs.rateattitude); // request attitude
-                        comPort.requestDatastream((byte)ArdupilotMega.MAVLink.MAV_DATA_STREAM.EXTRA2, MainV2.cs.rateattitude); // request vfr
-                        comPort.requestDatastream((byte)ArdupilotMega.MAVLink.MAV_DATA_STREAM.EXTRA3, MainV2.cs.ratesensors); // request extra stuff - tridge
-                        comPort.requestDatastream((byte)ArdupilotMega.MAVLink.MAV_DATA_STREAM.RAW_SENSORS, MainV2.cs.ratesensors); // request raw sensor
-                        comPort.requestDatastream((byte)ArdupilotMega.MAVLink.MAV_DATA_STREAM.RC_CHANNELS, MainV2.cs.raterc); // request rc info
+                        MainV2.comPort.requestDatastream((byte)ArdupilotMega.MAVLink.MAV_DATA_STREAM.EXTENDED_STATUS, MainV2.cs.ratestatus); // mode
+                        MainV2.comPort.requestDatastream((byte)ArdupilotMega.MAVLink.MAV_DATA_STREAM.POSITION, MainV2.cs.rateposition); // request gps
+                        MainV2.comPort.requestDatastream((byte)ArdupilotMega.MAVLink.MAV_DATA_STREAM.EXTRA1, MainV2.cs.rateattitude); // request attitude
+                        MainV2.comPort.requestDatastream((byte)ArdupilotMega.MAVLink.MAV_DATA_STREAM.EXTRA2, MainV2.cs.rateattitude); // request vfr
+                        MainV2.comPort.requestDatastream((byte)ArdupilotMega.MAVLink.MAV_DATA_STREAM.EXTRA3, MainV2.cs.ratesensors); // request extra stuff - tridge
+                        MainV2.comPort.requestDatastream((byte)ArdupilotMega.MAVLink.MAV_DATA_STREAM.RAW_SENSORS, MainV2.cs.ratesensors); // request raw sensor
+                        MainV2.comPort.requestDatastream((byte)ArdupilotMega.MAVLink.MAV_DATA_STREAM.RC_CHANNELS, MainV2.cs.raterc); // request rc info
                     }
-                    catch { }
+                    catch { log.Error("Failed to request rates"); }
                     lastdata = DateTime.Now.AddSeconds(120); // prevent flooding
                 }
 
@@ -740,16 +520,20 @@ namespace ArdupilotMega.GCSViews
                         aviwriter.avi_end(hud1.Width, hud1.Height, 10);
                     }
                 }
-                catch { }
+                catch { log.Error("Failed to write avi"); }
 
                 if (MainV2.comPort.logreadmode && MainV2.comPort.logplaybackfile != null)
                 {
                     if (threadrun == 0) { return; }
 
-                    if (comPort.BaseStream.IsOpen)
+                    if (MainV2.comPort.BaseStream.IsOpen)
                     {
                         MainV2.comPort.logreadmode = false;
-                        MainV2.comPort.logplaybackfile.Close();
+                        try
+                        {
+                            MainV2.comPort.logplaybackfile.Close();
+                        }
+                        catch { log.Error("Failed to close logfile"); }
                         MainV2.comPort.logplaybackfile = null;
                     }
 
@@ -758,8 +542,12 @@ namespace ArdupilotMega.GCSViews
 
                     if (updatescreen.AddMilliseconds(300) < DateTime.Now)
                     {
-                        updatePlayPauseButton(true);
-                        updateLogPlayPosition();
+                        try
+                        {
+                            updatePlayPauseButton(true);
+                            updateLogPlayPosition();
+                        }
+                        catch { log.Error("Failed to update log playback pos"); }
                         updatescreen = DateTime.Now;
                     }
 
@@ -770,7 +558,7 @@ namespace ArdupilotMega.GCSViews
                     {
                         MainV2.comPort.readPacket();
                     }
-                    catch { }
+                    catch { log.Error("Failed to read log packet"); }
 
                     double act = (MainV2.comPort.lastlogread - logplayback).TotalMilliseconds;
 
@@ -823,12 +611,14 @@ namespace ArdupilotMega.GCSViews
                         tunning = DateTime.Now;
                     }
 
-
-
-                    if (MainV2.comPort.logplaybackfile != null && MainV2.comPort.logplaybackfile.BaseStream.Position == MainV2.comPort.logplaybackfile.BaseStream.Length)
+                    try
                     {
-                        MainV2.comPort.logreadmode = false;
+                        if (MainV2.comPort.logplaybackfile != null && MainV2.comPort.logplaybackfile.BaseStream.Position == MainV2.comPort.logplaybackfile.BaseStream.Length)
+                        {
+                            MainV2.comPort.logreadmode = false;
+                        }
                     }
+                    catch { MainV2.comPort.logreadmode = false; }
                 }
                 else
                 {
@@ -847,7 +637,7 @@ namespace ArdupilotMega.GCSViews
 
                 try
                 {
-                    // Console.WriteLine(DateTime.Now.Millisecond);
+                     //Console.WriteLine(DateTime.Now.Millisecond);
                     updateBindingSource();
                     // Console.WriteLine(DateTime.Now.Millisecond + " done ");
 
@@ -1340,9 +1130,9 @@ namespace ArdupilotMega.GCSViews
             threadrun = 0;
             try
             {
-                if (comPort.BaseStream.IsOpen)
+                if (MainV2.comPort.BaseStream.IsOpen)
                 {
-                    comPort.Close();
+                    MainV2.comPort.Close();
                 }
             }
             catch { }
@@ -1374,7 +1164,7 @@ namespace ArdupilotMega.GCSViews
             {
                 ((Button)sender).Enabled = false;
 #if MAVLINK10
-                comPort.doCommand((MAVLink.MAV_CMD)Enum.Parse(typeof(MAVLink.MAV_CMD), CMB_action.Text), 1, 0, 1, 0, 0, 0, 0);
+                MainV2.comPort.doCommand((MAVLink.MAV_CMD)Enum.Parse(typeof(MAVLink.MAV_CMD), CMB_action.Text), 1, 0, 1, 0, 0, 0, 0);
 #else
                 comPort.doAction((MAVLink.MAV_ACTION)Enum.Parse(typeof(MAVLink.MAV_ACTION), "MAV_ACTION_" + CMB_action.Text));
 #endif
@@ -1391,7 +1181,7 @@ namespace ArdupilotMega.GCSViews
 
                 //comPort.doAction(MAVLink09.MAV_ACTION.MAV_ACTION_RETURN); // set nav from
                 //System.Threading.Thread.Sleep(100);
-                comPort.setWPCurrent(1); // set nav to
+                MainV2.comPort.setWPCurrent(1); // set nav to
                 //System.Threading.Thread.Sleep(100);
                 //comPort.doAction(MAVLink09.MAV_ACTION.MAV_ACTION_SET_AUTO); // set auto
             }
@@ -1513,6 +1303,25 @@ namespace ArdupilotMega.GCSViews
                 }
                 catch { }
             }
+            else
+            {
+                // setup a ballon with home distance
+                if (marker != null)
+                {
+                    if (routes.Markers.Contains(marker))
+                        routes.Markers.Remove(marker);
+                }
+
+                if (MainV2.getConfig("CHK_disttohomeflightdata") != false.ToString())
+                {
+                    marker = new GMapMarkerRect(point);
+                    marker.ToolTip = new GMapToolTip(marker);
+                    marker.ToolTipMode = MarkerTooltipMode.Always;
+                    marker.ToolTipText = "Dist to Home: " + ((gMapControl1.Manager.GetDistance(point, MainV2.cs.HomeLocation.Point()) * 1000) * MainV2.cs.multiplierdist).ToString("0");
+
+                    routes.Markers.Add(marker);
+                }
+            }
         }
 
         private void FlightData_ParentChanged(object sender, EventArgs e)
@@ -1521,6 +1330,25 @@ namespace ArdupilotMega.GCSViews
             {
                 MainV2.cam.camimage += new WebCamService.CamImage(cam_camimage);
             }
+
+            // QUAD
+            if (MainV2.comPort.param.ContainsKey("WP_SPEED_MAX"))
+            {
+                modifyandSetSpeed.Value = (decimal)((float)MainV2.comPort.param["WP_SPEED_MAX"] / 100.0);
+            } // plane with airspeed
+            else if (MainV2.comPort.param.ContainsKey("TRIM_ARSPD_CM") && MainV2.comPort.param.ContainsKey("ARSPD_ENABLE")
+                && MainV2.comPort.param.ContainsKey("ARSPD_USE") && (float)MainV2.comPort.param["ARSPD_ENABLE"] == 1
+                && (float)MainV2.comPort.param["ARSPD_USE"] == 1)
+            {
+                modifyandSetSpeed.Value = (decimal)((float)MainV2.comPort.param["TRIM_ARSPD_CM"] / 100.0);
+            } // plane without airspeed
+            else if (MainV2.comPort.param.ContainsKey("TRIM_THROTTLE") && MainV2.comPort.param.ContainsKey("ARSPD_USE")
+                && (float)MainV2.comPort.param["ARSPD_USE"] == 0)
+            {
+                modifyandSetSpeed.Value = (decimal)(float)MainV2.comPort.param["TRIM_THROTTLE"]; // percent
+            }
+
+            MainV2.comPort.ParamListChanged += FlightData_ParentChanged;
         }
 
         void cam_camimage(Image camimage)
@@ -1702,7 +1530,7 @@ namespace ArdupilotMega.GCSViews
             try
             {
                 ((Button)sender).Enabled = false;
-                comPort.setWPCurrent((ushort)CMB_setwp.SelectedIndex); // set nav to
+                MainV2.comPort.setWPCurrent((ushort)CMB_setwp.SelectedIndex); // set nav to
             }
             catch { CustomMessageBox.Show("The command failed to execute"); }
             ((Button)sender).Enabled = true;
@@ -1787,8 +1615,10 @@ namespace ArdupilotMega.GCSViews
             if (huddropout)
                 return;
 
+            SubMainLeft.Panel1Collapsed = true;
             Form dropout = new Form();
             dropout.Size = new System.Drawing.Size(hud1.Width, hud1.Height + 20);
+            SubMainLeft.Panel1.Controls.Remove(hud1);
             dropout.Controls.Add(hud1);
             dropout.Resize += new EventHandler(dropout_Resize);
             dropout.FormClosed += new FormClosedEventHandler(dropout_FormClosed);
@@ -1798,7 +1628,9 @@ namespace ArdupilotMega.GCSViews
 
         void dropout_FormClosed(object sender, FormClosedEventArgs e)
         {
-            GetFormFromGuid(GetOrCreateGuid("fd_hud_guid")).Controls.Add(hud1);
+            //GetFormFromGuid(GetOrCreateGuid("fd_hud_guid")).Controls.Add(hud1);
+            SubMainLeft.Panel1.Controls.Add(hud1);
+            SubMainLeft.Panel1Collapsed = false;
             huddropout = false;
         }
 
@@ -1832,18 +1664,20 @@ namespace ArdupilotMega.GCSViews
 
         private void tabControl1_SelectedIndexChanged(object sender, EventArgs e)
         {
-            /*
+
+
+
             if (tabControl1.SelectedTab == tabStatus)
             {
-                
+                tabStatus_Resize(sender, e);
             }
             else
             {
                 foreach (Control temp in tabStatus.Controls)
                 {
-                 //   temp.DataBindings.Clear();
-                  //  temp.Dispose();
-                  //  tabStatus.Controls.Remove(temp);
+                    //   temp.DataBindings.Clear();
+                    //  temp.Dispose();
+                    //  tabStatus.Controls.Remove(temp);
                 }
 
                 if (tabControl1.SelectedTab == tabQuick)
@@ -1851,7 +1685,7 @@ namespace ArdupilotMega.GCSViews
 
                 }
             }
-             */
+
         }
 
         private void Gspeed_DoubleClick(object sender, EventArgs e)
@@ -2454,12 +2288,7 @@ print 'Roll complete'
         private void setAspectRatioToolStripMenuItem_Click(object sender, EventArgs e)
         {
             hud1.SixteenXNine = !hud1.SixteenXNine;
-            hud1.Invalidate();
-        }
-
-        private void displayBatteryInfoToolStripMenuItem_Click(object sender, EventArgs e)
-        {
-            hud1.batteryon = !hud1.batteryon;
+            hud1.doResize();
         }
 
         private void quickView_DoubleClick(object sender, EventArgs e)
@@ -2497,7 +2326,7 @@ print 'Roll complete'
 
                 CheckBox chk_box = new CheckBox();
 
-                if (((QuickView)sender).desc == field.Name)
+                if (((QuickView)sender).Tag == field.Name)
                     chk_box.Checked = true;
 
                 chk_box.Text = field.Name;
@@ -2534,7 +2363,12 @@ print 'Roll complete'
                 MainV2.config[((QuickView)((CheckBox)sender).Tag).Name] = ((CheckBox)sender).Name;
 
                 // set description
-                ((QuickView)((CheckBox)sender).Tag).desc = ((CheckBox)sender).Name;
+                string desc = ((CheckBox)sender).Name;
+                ((QuickView)((CheckBox)sender).Tag).Tag = desc;
+
+                desc = MainV2.cs.GetNameandUnit(desc);
+
+                ((QuickView)((CheckBox)sender).Tag).desc = desc;
 
                 // set databinding for value
                 ((QuickView)((CheckBox)sender).Tag).DataBindings.Clear();
@@ -2651,7 +2485,9 @@ print 'Roll complete'
 
         private void hud1_Resize(object sender, EventArgs e)
         {
-            //Console.WriteLine("HUD resize "+ hud1.Width + " " + hud1.Height);
+            Console.WriteLine("HUD resize " + hud1.Width + " " + hud1.Height);
+
+            SubMainLeft.SplitterDistance = hud1.Height;
 
             try
             {
@@ -2662,8 +2498,8 @@ print 'Roll complete'
 
         private void resetToolStripMenuItem_Click(object sender, EventArgs e)
         {
-            dockContainer1.Clear();
-            SetupDocking();
+            //dockContainer1.Clear();
+            //SetupDocking();
             this.Refresh();
         }
 
@@ -2673,16 +2509,98 @@ print 'Roll complete'
                 return;
 
             // arm the MAV
-            MainV2.comPort.doARM(MainV2.cs.armed);
+            try
+            {
+                bool ans = MainV2.comPort.doARM(MainV2.cs.armed);
+                if (ans == false)
+                    CustomMessageBox.Show("Error: Arm message rejected by MAV");
+            }
+            catch { CustomMessageBox.Show("Error: No responce from MAV"); }
+
+
         }
 
         private void modifyandSetAlt_Click(object sender, EventArgs e)
         {
             int newalt = (int)modifyandSetAlt.Value;
-
-            MainV2.comPort.setNewWPAlt(new Locationwp() { alt = newalt });
-
+            try
+            {
+                MainV2.comPort.setNewWPAlt(new Locationwp() { alt = newalt / MainV2.cs.multiplierdist });
+            }
+            catch { CustomMessageBox.Show("Error sending command"); }
             //MainV2.comPort.setNextWPTargetAlt((ushort)MainV2.cs.wpno, newalt);
         }
+
+        private void gMapControl1_MouseLeave(object sender, EventArgs e)
+        {
+            if (marker != null)
+            {
+                if (routes.Markers.Contains(marker))
+                    routes.Markers.Remove(marker);
+            }
+        }
+
+        private void modifyandSetSpeed_Click(object sender, EventArgs e)
+        {
+            // QUAD
+            if (MainV2.comPort.param.ContainsKey("WP_SPEED_MAX"))
+            {
+                try
+                {
+                    MainV2.comPort.setParam("WP_SPEED_MAX", ((float)modifyandSetSpeed.Value * 100.0f));
+                }
+                catch { CustomMessageBox.Show("Error sending command"); }
+            } // plane with airspeed
+            else if (MainV2.comPort.param.ContainsKey("TRIM_ARSPD_CM") && MainV2.comPort.param.ContainsKey("ARSPD_ENABLE")
+                && MainV2.comPort.param.ContainsKey("ARSPD_USE") && (float)MainV2.comPort.param["ARSPD_ENABLE"] == 1
+                && (float)MainV2.comPort.param["ARSPD_USE"] == 1)
+            {
+                try
+                {
+                    MainV2.comPort.setParam("TRIM_ARSPD_CM", ((float)modifyandSetSpeed.Value * 100.0f));
+                }
+                catch { CustomMessageBox.Show("Error sending command"); }
+            } // plane without airspeed
+            else if (MainV2.comPort.param.ContainsKey("TRIM_THROTTLE") && MainV2.comPort.param.ContainsKey("ARSPD_USE")
+                && (float)MainV2.comPort.param["ARSPD_USE"] == 0)
+            {
+                try
+                {
+                    MainV2.comPort.setParam("TRIM_THROTTLE", (float)modifyandSetSpeed.Value);
+                }
+                catch { CustomMessageBox.Show("Error sending command"); }
+            }
+        }
+
+        private void modifyandSetSpeed_ParentChanged(object sender, EventArgs e)
+        {
+
+        }
+
+        private void triggerCameraToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            try
+            {
+                MainV2.comPort.setDigicamControl(true);
+            }
+            catch { CustomMessageBox.Show("Error sending command"); }
+        }
+
+        private void TRK_zoom_Scroll(object sender, EventArgs e)
+        {
+            try
+            {
+                if (gMapControl1.MaxZoom + 1 == (double)TRK_zoom.Value)
+                {
+                    gMapControl1.Zoom = (double)TRK_zoom.Value - .1;
+                }
+                else
+                {
+                    gMapControl1.Zoom = (double)TRK_zoom.Value;
+                }
+            }
+            catch { }
+        }
+
     }
 }

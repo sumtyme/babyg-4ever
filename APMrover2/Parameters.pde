@@ -18,54 +18,167 @@ const AP_Param::Info var_info[] PROGMEM = {
 	GSCALAR(software_type,          "SYSID_SW_TYPE",    Parameters::k_software_type),
 	GSCALAR(sysid_this_mav,         "SYSID_THISMAV",    MAV_SYSTEM_ID),
 	GSCALAR(sysid_my_gcs,           "SYSID_MYGCS",      255),
+
+    // @Param: SERIAL3_BAUD
+    // @DisplayName: Telemetry Baud Rate
+    // @Description: The baud rate used on the telemetry port
+    // @Values: 1:1200,2:2400,4:4800,9:9600,19:19200,38:38400,57:57600,111:111100,115:115200
+    // @User: Standard
 	GSCALAR(serial3_baud,           "SERIAL3_BAUD",     SERIAL3_BAUD/1000),
+
+    // @Param: TELEM_DELAY
+    // @DisplayName: Telemetry startup delay 
+    // @Description: The amount of time (in seconds) to delay radio telemetry to prevent an Xbee bricking on power up
+    // @User: Standard
+    // @Units: seconds
+    // @Range: 0 10
+    // @Increment: 1
     GSCALAR(telem_delay,            "TELEM_DELAY",     0),
-	GSCALAR(kff_pitch_compensation, "KFF_PTCHCOMP",     PITCH_COMP),
-	GSCALAR(kff_rudder_mix,         "KFF_RDDRMIX",      RUDDER_MIX),
-	GSCALAR(kff_pitch_to_throttle,  "KFF_PTCH2THR",     P_TO_T),
-	GSCALAR(kff_throttle_to_pitch,  "KFF_THR2PTCH",     T_TO_P),
+
+    // @Param: MANUAL_LEVEL
+    // @DisplayName: Manual Level
+    // @Description: Setting this to Disabled(0) will enable autolevel on every boot. Setting it to Enabled(1) will do a calibration only when you tell it to
+    // @Values: 0:Disabled,1:Enabled
+    // @User: Advanced
 	GSCALAR(manual_level,           "MANUAL_LEVEL",     0),
 	
+    // @Param: XTRK_GAIN_SC
+    // @DisplayName: Crosstrack Gain
+    // @Description: The scale between distance off the line and angle to meet the line (in Degrees * 100)
+    // @Range: 0 2000
+    // @Increment: 1
+    // @User: Standard
 	GSCALAR(crosstrack_gain,        "XTRK_GAIN_SC",     XTRACK_GAIN_SCALED),
-	GSCALAR(crosstrack_entry_angle, "XTRK_ANGLE_CD",    XTRACK_ENTRY_ANGLE_CENTIDEGREE),
 
-	GSCALAR(altitude_mix,           "ALT_MIX",          ALTITUDE_MIX),
-	GSCALAR(airspeed_ratio,         "ARSPD_RATIO",      AIRSPEED_RATIO),
-	GSCALAR(airspeed_offset,        "ARSPD_OFFSET",     0),
+    // @Param: XTRK_ANGLE_CD
+    // @DisplayName: Crosstrack Entry Angle
+    // @Description: Maximum angle used to correct for track following.
+    // @Units: centi-Degrees
+    // @Range: 0 9000
+    // @Increment: 1
+    // @User: Standard
+	GSCALAR(crosstrack_entry_angle, "XTRK_ANGLE_CD",    XTRACK_ENTRY_ANGLE_CENTIDEGREE),
 
 	GSCALAR(command_total,          "CMD_TOTAL",        0),
 	GSCALAR(command_index,          "CMD_INDEX",        0),
 	GSCALAR(waypoint_radius,        "WP_RADIUS",        WP_RADIUS_DEFAULT),
-	GSCALAR(loiter_radius,          "WP_LOITER_RAD",    LOITER_RADIUS_DEFAULT),
 
-#if GEOFENCE_ENABLED == ENABLED
-	GSCALAR(fence_action,           "FENCE_ACTION",     0),
-	GSCALAR(fence_total,            "FENCE_TOTAL",      0),
-	GSCALAR(fence_channel,          "FENCE_CHANNEL",    0),
-	GSCALAR(fence_minalt,           "FENCE_MINALT",     0),
-	GSCALAR(fence_maxalt,           "FENCE_MAXALT",     0),
-#endif
-
-	GSCALAR(flybywire_airspeed_min, "ARSPD_FBW_MIN",    AIRSPEED_FBW_MIN),
-	GSCALAR(flybywire_airspeed_max, "ARSPD_FBW_MAX",    AIRSPEED_FBW_MAX),
-
+    // @Param: THR_MIN
+    // @DisplayName: Minimum Throttle
+    // @Description: The minimum throttle setting to which the autopilot will apply.
+    // @Units: Percent
+    // @Range: 0 100
+    // @Increment: 1
+    // @User: Standard
 	GSCALAR(throttle_min,           "THR_MIN",          THROTTLE_MIN),
+
+    // @Param: THR_MAX
+    // @DisplayName: Maximum Throttle
+    // @Description: The maximum throttle setting to which the autopilot will apply.
+    // @Units: Percent
+    // @Range: 0 100
+    // @Increment: 1
+    // @User: Standard
 	GSCALAR(throttle_max,           "THR_MAX",          THROTTLE_MAX),
+
+    // @Param: THR_SLEWRATE
+    // @DisplayName: Throttle slew rate
+    // @Description: maximum percentage change in throttle per second. A setting of 10 means to not change the throttle by more than 10% of the full throttle range in one second
+    // @Units: Percent
+    // @Range: 0 100
+    // @Increment: 1
+    // @User: Standard
 	GSCALAR(throttle_slewrate,      "THR_SLEWRATE",     THROTTLE_SLEW_LIMIT),
+
+    // @Param: THR_FAILSAFE
+    // @DisplayName: Throttle Failsafe Enable
+    // @Description: The throttle failsafe allows you to configure a software failsafe activated by a setting on the throttle input channel
+    // @Values: 0:Disabled,1:Enabled
+    // @User: Standard
 	GSCALAR(throttle_fs_enabled,    "THR_FAILSAFE",     THROTTLE_FAILSAFE),
+
+    // @Param: THR_FS_VALUE
+    // @DisplayName: Throttle Failsafe Value
+    // @Description: The PWM level on channel 3 below which throttle sailsafe triggers
+    // @User: Standard
 	GSCALAR(throttle_fs_value,      "THR_FS_VALUE",     THROTTLE_FS_VALUE),
+
+    // @Param: TRIM_THROTTLE
+    // @DisplayName: Throttle cruise percentage
+    // @Description: The target percentage of throttle to apply for normal flight
+    // @Units: Percent
+    // @Range: 0 100
+    // @Increment: 1
+    // @User: Standard
 	GSCALAR(throttle_cruise,        "TRIM_THROTTLE",    THROTTLE_CRUISE),
 
+    // @Param: FS_SHORT_ACTN
+    // @DisplayName: Short failsafe action
+    // @Description: The action to take on a short (1 second) failsafe event
+    // @Values: 0:None,1:ReturnToLaunch
+    // @User: Standard
 	GSCALAR(short_fs_action,        "FS_SHORT_ACTN",    SHORT_FAILSAFE_ACTION),
+
+    // @Param: FS_LONG_ACTN
+    // @DisplayName: Long failsafe action
+    // @Description: The action to take on a long (20 second) failsafe event
+    // @Values: 0:None,1:ReturnToLaunch
+    // @User: Standard
 	GSCALAR(long_fs_action,         "FS_LONG_ACTN",     LONG_FAILSAFE_ACTION),
+
+    // @Param: FS_GCS_ENABL
+    // @DisplayName: GCS failsafe enable
+    // @Description: Enable ground control station telemetry failsafe. Failsafe will trigger after 20 seconds of no MAVLink heartbeat messages
+    // @Values: 0:Disabled,1:Enabled
+    // @User: Standard
 	GSCALAR(gcs_heartbeat_fs_enabled, "FS_GCS_ENABL",   GCS_HEARTBEAT_FAILSAFE),
 
+    // @Param: FLTMODE_CH
+    // @DisplayName: Flightmode channel
+    // @Description: RC Channel to use for flight mode control
+    // @User: Advanced
 	GSCALAR(flight_mode_channel,    "FLTMODE_CH",       FLIGHT_MODE_CHANNEL),
+
+    // @Param: FLTMODE1
+    // @DisplayName: FlightMode1
+    // @Values: 0:Manual,1:CIRCLE,2:STABILIZE,5:FBWA,6:FBWB,10:Auto,11:RTL,12:Loiter,15:Guided
+    // @User: Standard
+    // @Description: Flight mode for switch position 1 (910 to 1230 and above 2049)
 	GSCALAR(flight_mode1,           "FLTMODE1",         FLIGHT_MODE_1),
+
+    // @Param: FLTMODE2
+    // @DisplayName: FlightMode2
+    // @Description: Flight mode for switch position 2 (1231 to 1360)
+    // @Values: 0:Manual,1:CIRCLE,2:STABILIZE,5:FBWA,6:FBWB,10:Auto,11:RTL,12:Loiter,15:Guided
+    // @User: Standard
 	GSCALAR(flight_mode2,           "FLTMODE2",         FLIGHT_MODE_2),
+
+    // @Param: FLTMODE3
+    // @DisplayName: FlightMode3
+    // @Description: Flight mode for switch position 3 (1361 to 1490)
+    // @Values: 0:Manual,1:CIRCLE,2:STABILIZE,5:FBWA,6:FBWB,10:Auto,11:RTL,12:Loiter,15:Guided
+    // @User: Standard
 	GSCALAR(flight_mode3,           "FLTMODE3",         FLIGHT_MODE_3),
+
+    // @Param: FLTMODE4
+    // @DisplayName: FlightMode4
+    // @Description: Flight mode for switch position 4 (1491 to 1620)
+    // @Values: 0:Manual,1:CIRCLE,2:STABILIZE,5:FBWA,6:FBWB,10:Auto,11:RTL,12:Loiter,15:Guided
+    // @User: Standard
 	GSCALAR(flight_mode4,           "FLTMODE4",         FLIGHT_MODE_4),
+
+    // @Param: FLTMODE5
+    // @DisplayName: FlightMode5
+    // @Description: Flight mode for switch position 5 (1621 to 1749)
+    // @Values: 0:Manual,1:CIRCLE,2:STABILIZE,5:FBWA,6:FBWB,10:Auto,11:RTL,12:Loiter,15:Guided
+    // @User: Standard
 	GSCALAR(flight_mode5,           "FLTMODE5",         FLIGHT_MODE_5),
+
+    // @Param: FLTMODE6
+    // @DisplayName: FlightMode6
+    // @Description: Flight mode for switch position 6 (1750 to 2049)
+    // @Values: 0:Manual,1:CIRCLE,2:STABILIZE,5:FBWA,6:FBWB,10:Auto,11:RTL,12:Loiter,15:Guided
+    // @User: Standard
 	GSCALAR(flight_mode6,           "FLTMODE6",         FLIGHT_MODE_6),
 
 	GSCALAR(roll_limit,             "LIM_ROLL_CD",      HEAD_MAX_CENTIDEGREE),
@@ -73,11 +186,6 @@ const AP_Param::Info var_info[] PROGMEM = {
 	GSCALAR(pitch_limit_min,        "LIM_PITCH_MIN",    PITCH_MIN_CENTIDEGREE),
 
 	GSCALAR(auto_trim,              "TRIM_AUTO",        AUTO_TRIM),
-	GSCALAR(switch_enable,          "SWITCH_ENABLE",    REVERSE_SWITCH),
-	GSCALAR(mix_mode,               "ELEVON_MIXING",    ELEVON_MIXING),
-	GSCALAR(reverse_elevons,        "ELEVON_REVERSE",   ELEVON_REVERSE),
-	GSCALAR(reverse_ch1_elevon,     "ELEVON_CH1_REV",   ELEVON_CH1_REVERSE),
-	GSCALAR(reverse_ch2_elevon,     "ELEVON_CH2_REV",   ELEVON_CH2_REVERSE),
 	GSCALAR(num_resets,             "SYS_NUM_RESETS",   0),
 	GSCALAR(log_bitmask,            "LOG_BITMASK",      DEFAULT_LOG_BITMASK),
 	GSCALAR(log_last_filenumber,    "LOG_LASTFILE",     0),
@@ -86,25 +194,13 @@ const AP_Param::Info var_info[] PROGMEM = {
 	GSCALAR(min_gndspeed,           "MIN_GNDSPD_CM",    MIN_GNDSPEED_CM),
 	GSCALAR(ch7_option,             "CH7_OPT",          CH7_OPTION),
 
-	GSCALAR(pitch_trim,             "TRIM_PITCH_CD",    0),
-	GSCALAR(RTL_altitude,           "ALT_HOLD_RTL",     ALT_HOLD_HOME_CM),
-	GSCALAR(FBWB_min_altitude,      "ALT_HOLD_FBWCM",   ALT_HOLD_FBW_CM),
-
-	GSCALAR(ground_temperature,     "GND_TEMP",         0),
-	GSCALAR(ground_pressure,        "GND_ABS_PRESS",    0),
 	GSCALAR(compass_enabled,        "MAG_ENABLE",       MAGNETOMETER),
-	GSCALAR(flap_1_percent,         "FLAP_1_PERCNT",    FLAP_1_PERCENT),
-	GSCALAR(flap_1_speed,           "FLAP_1_SPEED",     FLAP_2_SPEED),
-	GSCALAR(flap_2_percent,         "FLAP_2_PERCNT",    FLAP_2_PERCENT),
-	GSCALAR(flap_2_speed,           "FLAP_2_SPEED",     FLAP_2_SPEED),
-
 
 	GSCALAR(battery_monitoring,     "BATT_MONITOR",     DISABLED),
 	GSCALAR(volt_div_ratio,         "VOLT_DIVIDER",     VOLT_DIV_RATIO),
 	GSCALAR(curr_amp_per_volt,      "AMP_PER_VOLT",     CURR_AMP_PER_VOLT),
 	GSCALAR(input_voltage,          "INPUT_VOLTS",      INPUT_VOLTAGE),
 	GSCALAR(pack_capacity,          "BATT_CAPACITY",    HIGH_DISCHARGE),
-	GSCALAR(inverted_flight_ch,     "INVERTEDFLT_CH",   0),
 #if HIL_MODE != HIL_MODE_ATTITUDE
 #if CONFIG_SONAR == ENABLED     
 	// @Param: SONAR_ENABLE
@@ -116,12 +212,9 @@ const AP_Param::Info var_info[] PROGMEM = {
 	GSCALAR(sonar_type,	        "SONAR_TYPE",           AP_RANGEFINDER_MAXSONARXL),
 #endif	
 #endif
-	GSCALAR(airspeed_enabled,       "ARSPD_ENABLE",     AIRSPEED_SENSOR),
 
  // ************************************************************
         // APMrover parameters - JLN update
-        
-	GSCALAR(closed_loop_nav,        "ROV_CL_NAV",       CLOSED_LOOP_NAV),
 	GSCALAR(auto_wp_radius,         "ROV_AWPR_NAV",     AUTO_WP_RADIUS),
 	GSCALAR(sonar_trigger,          "ROV_SONAR_TRIG",   SONAR_TRIGGER),
 	GSCALAR(turn_gain,              "ROV_GAIN",         TURN_GAIN),
@@ -150,7 +243,22 @@ const AP_Param::Info var_info[] PROGMEM = {
 	GOBJECT(compass,                "COMPASS_",	Compass),
 	GOBJECT(gcs0,					"SR0_",     GCS_MAVLINK),
 	GOBJECT(gcs3,					"SR3_",     GCS_MAVLINK),
-	GOBJECT(imu,					"IMU_",     IMU),
+
+#if HIL_MODE == HIL_MODE_DISABLED
+    // @Group: INS_
+    // @Path: ../libraries/AP_InertialSensor/AP_InertialSensor.cpp
+    GOBJECT(ins,                            "INS_", AP_InertialSensor),
+#endif
+
+#ifdef DESKTOP_BUILD
+    // @Group: SIM_
+    // @Path: ../libraries/SITL/SITL.cpp
+    GOBJECT(sitl, "SIM_", SITL),
+#endif
+
+    // @Group: AHRS_
+    // @Path: ../libraries/AP_AHRS/AP_AHRS.cpp
+    GOBJECT(ahrs,                   "AHRS_",    AP_AHRS),
 
 	AP_VAREND
 };
@@ -162,17 +270,17 @@ static void load_parameters(void)
 	     g.format_version != Parameters::k_format_version) {
 
 		// erase all parameters
-		Serial.printf_P(PSTR("Firmware change: erasing EEPROM...\n"));
+		cliSerial->printf_P(PSTR("Firmware change: erasing EEPROM...\n"));
 		AP_Param::erase_all();
 
 		// save the current format version
 		g.format_version.set_and_save(Parameters::k_format_version);
-		Serial.println_P(PSTR("done."));
+		cliSerial->println_P(PSTR("done."));
     } else {
 	    unsigned long before = micros();
 	    // Load all auto-loaded EEPROM variables
 	    AP_Param::load_all();
 
-	    Serial.printf_P(PSTR("load_all took %luus\n"), micros() - before);
+	    cliSerial->printf_P(PSTR("load_all took %luus\n"), micros() - before);
 	}
 }

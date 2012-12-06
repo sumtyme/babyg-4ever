@@ -21,7 +21,7 @@ static int8_t	planner_mode(uint8_t argc, const Menu::arg *argv);	// in planner.p
 // printf_P is a version of print_f that reads from flash memory
 static int8_t	main_menu_help(uint8_t argc, const Menu::arg *argv)
 {
-	Serial.printf_P(PSTR("Commands:\n"
+	cliSerial->printf_P(PSTR("Commands:\n"
 						 "  logs        log readback/setup mode\n"
 						 "  setup       setup mode\n"
 						 "  test        test mode\n"
@@ -48,10 +48,14 @@ static const struct Menu::command main_menu_commands[] PROGMEM = {
 MENU(main_menu, THISFIRMWARE, main_menu_commands);
 
 // the user wants the CLI. It never exits
-static void run_cli(void)
+static void run_cli(FastSerial *port)
 {
     // disable the failsafe code in the CLI
     timer_scheduler.set_failsafe(NULL);
+
+    cliSerial = port;
+    Menu::set_port(port);
+    port->set_blocking_writes(true);
 
     while (1) {
         main_menu.run();
@@ -89,7 +93,7 @@ static void init_ardupilot()
 	// XXX This could be optimised to reduce the buffer sizes in the cases
 	// where they are not otherwise required.
 	//
-	Serial.begin(SERIAL0_BAUD, 128, 128);
+	cliSerial->begin(SERIAL0_BAUD, 128, 128);
 
 	// GPS serial port.
 	//
@@ -103,7 +107,7 @@ static void init_ardupilot()
     // standard gps running
     Serial1.begin(115200, 128, 16);
 
-	Serial.printf_P(PSTR("\n\nInit " THISFIRMWARE
+	cliSerial->printf_P(PSTR("\n\nInit " THISFIRMWARE
 						 "\n\nFree RAM: %u\n"),
                     memcheck_available_memory());
                     
@@ -129,6 +133,9 @@ static void init_ardupilot()
 
     timer_scheduler.init( & isr_registry );
 
+    // initialise the analog port reader
+    AP_AnalogSource_Arduino::init_timer(&timer_scheduler);
+
 	//
 	// Check the EEPROM format version before loading any parameters from EEPROM.
 	//
@@ -146,7 +153,7 @@ static void init_ardupilot()
     if (!usb_connected) {
         // we are not connected via USB, re-init UART0 with right
         // baud rate
-        Serial.begin(map_baudrate(g.serial3_baud, SERIAL3_BAUD), 128, 128);
+        cliSerial->begin(map_baudrate(g.serial3_baud, SERIAL3_BAUD), 128, 128);
     }
 #else
     // we have a 2nd serial port for telemetry
@@ -179,12 +186,10 @@ static void init_ardupilot()
 #endif
 
 #if LITE == DISABLED
-	barometer.init(&timer_scheduler);
-
 	if (g.compass_enabled==true) {
         compass.set_orientation(MAG_ORIENTATION);							// set compass's orientation on aircraft
 		if (!compass.init()|| !compass.read()) {
-            Serial.println_P(PSTR("Compass initialisation failed!"));
+            cliSerial->println_P(PSTR("Compass initialisation failed!"));
             g.compass_enabled = false;
         } else {
             ahrs.set_compass(&compass);
@@ -198,7 +203,7 @@ static void init_ardupilot()
   // I2c.setSpeed(true);
 
   if (!compass.init()) {
-	  Serial.println("compass initialisation failed!");
+	  cliSerial->println("compass initialisation failed!");
 	  while (1) ;
   }
 
@@ -206,19 +211,19 @@ static void init_ardupilot()
   compass.set_offsets(0,0,0);  // set offsets to account for surrounding interference
   compass.set_declination(ToRad(0.0));  // set local difference between magnetic north and true north
 
-  Serial.print("Compass auto-detected as: ");
+  cliSerial->print("Compass auto-detected as: ");
   switch( compass.product_id ) {
       case AP_COMPASS_TYPE_HIL:
-	      Serial.println("HIL");
+	      cliSerial->println("HIL");
 		  break;
       case AP_COMPASS_TYPE_HMC5843:
-	      Serial.println("HMC5843");
+	      cliSerial->println("HMC5843");
 		  break;
       case AP_COMPASS_TYPE_HMC5883L:
-	      Serial.println("HMC5883L");
+	      cliSerial->println("HMC5883L");
 		  break;
       default:
-	      Serial.println("unknown");
+	      cliSerial->println("unknown");
 		  break;
   }
   
@@ -259,11 +264,6 @@ static void init_ardupilot()
 	DDRL |= B00000100;					// Set Port L, pin 2 to output for the relay
 #endif
 
-#if FENCE_TRIGGERED_PIN > 0
-    pinMode(FENCE_TRIGGERED_PIN, OUTPUT);
-    digitalWrite(FENCE_TRIGGERED_PIN, LOW);
-#endif
-
     /*
       setup the 'main loop is dead' check. Note that this relies on
       the RC library being initialised.
@@ -280,21 +280,22 @@ static void init_ardupilot()
 #if CLI_ENABLED == ENABLED && CLI_SLIDER_ENABLED == ENABLED
 	if (digitalRead(SLIDE_SWITCH_PIN) == 0) {
 		digitalWrite(A_LED_PIN,LED_ON);		// turn on setup-mode LED
-		Serial.printf_P(PSTR("\n"
+		cliSerial->printf_P(PSTR("\n"
 							 "Entering interactive setup mode...\n"
 							 "\n"
 							 "If using the Arduino Serial Monitor, ensure Line Ending is set to Carriage Return.\n"
 							 "Type 'help' to list commands, 'exit' to leave a submenu.\n"
 							 "Visit the 'setup' menu for first-time configuration.\n"));
-        Serial.println_P(PSTR("\nMove the slide switch and reset to FLY.\n"));
-        run_cli();
+        cliSerial->println_P(PSTR("\nMove the slide switch and reset to FLY.\n"));
+        run_cli(&cliSerial);
 	}
 #else
-    Serial.printf_P(PSTR("\nPress ENTER 3 times to start interactive setup\n\n"));
+    const prog_char_t *msg = PSTR("\nPress ENTER 3 times to start interactive setup\n");
+    cliSerial->println_P(msg);
+#if USB_MUX_PIN == 0
+    Serial3.println_P(msg);
+#endif
 #endif // CLI_ENABLED
-
-	// read in the flight switches
-	update_servo_switches();
 
 	startup_ground();
 
@@ -302,7 +303,8 @@ static void init_ardupilot()
 	if (g.log_bitmask & MASK_LOG_CMD)
 			Log_Write_Startup(TYPE_GROUNDSTART_MSG);
 #endif
-        set_mode(MANUAL);
+
+    set_mode(MANUAL);
 
 	// set the correct flight mode
 	// ---------------------------
@@ -333,15 +335,12 @@ static void startup_ground(void)
 	//------------------------
     //
 
-	startup_IMU_ground(false);
+	startup_INS_ground(false);
 #endif
+
 	// read the radio to set trims
 	// ---------------------------
-	trim_radio();		// This was commented out as a HACK.  Why?  I don't find a problem.
-
-	// Save the settings for in-air restart
-	// ------------------------------------
-	//save_EEPROM_groundstart();
+	trim_radio();
 
 	// initialize commands
 	// -------------------
@@ -351,11 +350,11 @@ static void startup_ground(void)
 	// -----------------------
 	demo_servos(3);
 
-	gcs_send_text_P(SEVERITY_LOW,PSTR("\n\n Ready to FLY."));
+	gcs_send_text_P(SEVERITY_LOW,PSTR("\n\n Ready to drive."));
 }
 
 static void set_mode(byte mode)
-{       struct Location temp;
+{       
 
 	if(control_mode == mode){
 		// don't switch modes if we are already in the correct mode.
@@ -365,34 +364,23 @@ static void set_mode(byte mode)
 		trim_control_surfaces();
 
 	control_mode = mode;
-	crash_timer = 0;
-        throttle_last = 0;
-        throttle = 500;
+    throttle_last = 0;
+    throttle = 500;
         
 	switch(control_mode)
 	{
 		case MANUAL:
 		case LEARNING:
 		case CIRCLE:
-		case FLY_BY_WIRE_A:
-		case FLY_BY_WIRE_B: 
 			break;
 
 		case AUTO:
-                        rtl_complete = false;
-                        restart_nav();
+            rtl_complete = false;
+            restart_nav();
 			break;
 
 		case RTL:
 			do_RTL();
-			break;
-
-		case LOITER:
-			do_loiter_at_location();
-			break;
-
-		case GUIDED:
-			set_guided_WP();
 			break;
 
 		default:
@@ -447,44 +435,33 @@ static void check_short_failsafe()
 }
 
 #if LITE == DISABLED
-static void startup_IMU_ground(bool force_accel_level)
+static void startup_INS_ground(bool force_accel_level)
 {
 #if HIL_MODE != HIL_MODE_ATTITUDE
     gcs_send_text_P(SEVERITY_MEDIUM, PSTR("Warming up ADC..."));
  	mavlink_delay(500);
 
-	// Makes the servos wiggle twice - about to begin IMU calibration - HOLD LEVEL AND STILL!!
+	// Makes the servos wiggle twice - about to begin INS calibration - HOLD LEVEL AND STILL!!
 	// -----------------------
 	demo_servos(2);
-    gcs_send_text_P(SEVERITY_MEDIUM, PSTR("Beginning IMU calibration; do not move plane"));
+    gcs_send_text_P(SEVERITY_MEDIUM, PSTR("Beginning INS calibration; do not move plane"));
 	mavlink_delay(1000);
 
-	imu.init(IMU::COLD_START, mavlink_delay, flash_leds, &timer_scheduler);
+	ins.init(AP_InertialSensor::COLD_START, 
+             ins_sample_rate, 
+             mavlink_delay, flash_leds, &timer_scheduler);
     if (force_accel_level || g.manual_level == 0) {
         // when MANUAL_LEVEL is set to 1 we don't do accelerometer
         // levelling on each boot, and instead rely on the user to do
         // it once via the ground station	
-	imu.init_accel(mavlink_delay, flash_leds);
+        ins.init_accel(mavlink_delay, flash_leds);
 	}
 	ahrs.set_fly_forward(true);
     ahrs.reset();
 
-	// read Baro pressure at ground
-	//-----------------------------
-	init_barometer();
-
-    if (g.airspeed_enabled == true) {
-        // initialize airspeed sensor
-        // --------------------------
-        zero_airspeed();
-        gcs_send_text_P(SEVERITY_LOW,PSTR("<startup_ground> zero airspeed calibrated"));
-    } else {
-        gcs_send_text_P(SEVERITY_LOW,PSTR("<startup_ground> NO airspeed"));
-    }
-
 #endif // HIL_MODE_ATTITUDE
 
-	digitalWrite(B_LED_PIN, LED_ON);		// Set LED B high to indicate IMU ready
+	digitalWrite(B_LED_PIN, LED_ON);		// Set LED B high to indicate INS ready
 	digitalWrite(A_LED_PIN, LED_OFF);
 	digitalWrite(C_LED_PIN, LED_OFF);
 }
@@ -521,7 +498,6 @@ static void update_GPS_light(void)
 static void resetPerfData(void) {
 	mainLoop_count 			= 0;
 	G_Dt_max 				= 0;
-	imu.adc_constraints 	= 0;
 	ahrs.renorm_range_count 	= 0;
 	ahrs.renorm_blowup_count = 0;
 	gps_fix_count 			= 0;
@@ -546,7 +522,7 @@ static uint32_t map_baudrate(int8_t rate, uint32_t default_baud)
     case 111:  return 111100;
     case 115:  return 115200;
     }
-    Serial.println_P(PSTR("Invalid SERIAL3_BAUD"));
+    cliSerial->println_P(PSTR("Invalid SERIAL3_BAUD"));
     return default_baud;
 }
 
@@ -562,9 +538,9 @@ static void check_usb_mux(void)
     // the user has switched to/from the telemetry port
     usb_connected = usb_check;
     if (usb_connected) {
-        Serial.begin(SERIAL0_BAUD, 128, 128);
+        cliSerial->begin(SERIAL0_BAUD, 128, 128);
     } else {
-        Serial.begin(map_baudrate(g.serial3_baud, SERIAL3_BAUD), 128, 128);
+        cliSerial->begin(map_baudrate(g.serial3_baud, SERIAL3_BAUD), 128, 128);
     }
 }
 #endif
@@ -590,3 +566,26 @@ uint16_t board_voltage(void)
     return vcc.read_vcc();
 }
 #endif
+
+
+static void
+print_flight_mode(uint8_t mode)
+{
+    switch (mode) {
+    case MANUAL:
+        cliSerial->println_P(PSTR("Manual"));
+        break;
+    case LEARNING:
+        cliSerial->println_P(PSTR("Learning"));
+        break;
+    case AUTO:
+        cliSerial->println_P(PSTR("AUTO"));
+        break;
+    case RTL:
+        cliSerial->println_P(PSTR("RTL"));
+        break;
+    default:
+        cliSerial->println_P(PSTR("---"));
+        break;
+    }
+}

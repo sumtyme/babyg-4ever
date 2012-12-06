@@ -12,19 +12,18 @@
 static int8_t   process_logs(uint8_t argc, const Menu::arg *argv);      // in Log.pde
 static int8_t   setup_mode(uint8_t argc, const Menu::arg *argv);        // in setup.pde
 static int8_t   test_mode(uint8_t argc, const Menu::arg *argv);         // in test.cpp
-static int8_t   planner_mode(uint8_t argc, const Menu::arg *argv);      // in planner.pde
+static int8_t   reboot_board(uint8_t argc, const Menu::arg *argv);
 
 // This is the help function
 // PSTR is an AVR macro to read strings from flash memory
 // printf_P is a version of print_f that reads from flash memory
 static int8_t   main_menu_help(uint8_t argc, const Menu::arg *argv)
 {
-    Serial.printf_P(PSTR("Commands:\n"
+    cliSerial->printf_P(PSTR("Commands:\n"
                          "  logs        log readback/setup mode\n"
                          "  setup       setup mode\n"
                          "  test        test mode\n"
-                         "\n"
-                         "Move the slide switch and reset to FLY.\n"
+                         "  reboot      reboot to flight mode\n"
                          "\n"));
     return(0);
 }
@@ -36,18 +35,28 @@ static const struct Menu::command main_menu_commands[] PROGMEM = {
     {"logs",                process_logs},
     {"setup",               setup_mode},
     {"test",                test_mode},
+    {"reboot",              reboot_board},
     {"help",                main_menu_help},
-    {"planner",             planner_mode}
 };
 
 // Create the top-level menu object.
 MENU(main_menu, THISFIRMWARE, main_menu_commands);
 
+static int8_t reboot_board(uint8_t argc, const Menu::arg *argv)
+{
+    reboot_apm();
+    return 0;
+}
+
 // the user wants the CLI. It never exits
-static void run_cli(void)
+static void run_cli(FastSerial *port)
 {
     // disable the failsafe code in the CLI
     timer_scheduler.set_failsafe(NULL);
+
+    cliSerial = port;
+    Menu::set_port(port);
+    port->set_blocking_writes(true);
 
     while (1) {
         main_menu.run();
@@ -88,7 +97,7 @@ static void init_ardupilot()
     // standard gps running
     Serial1.begin(38400, 256, 16);
 
-    Serial.printf_P(PSTR("\n\nInit " THISFIRMWARE
+    cliSerial->printf_P(PSTR("\n\nInit " THISFIRMWARE
                          "\n\nFree RAM: %u\n"),
                     memcheck_available_memory());
 
@@ -171,7 +180,7 @@ static void init_ardupilot()
     if (g.compass_enabled==true) {
         compass.set_orientation(MAG_ORIENTATION);                                                       // set compass's orientation on aircraft
         if (!compass.init() || !compass.read()) {
-            Serial.println_P(PSTR("Compass initialisation failed!"));
+            cliSerial->println_P(PSTR("Compass initialisation failed!"));
             g.compass_enabled = false;
         } else {
             ahrs.set_compass(&compass);
@@ -222,7 +231,11 @@ static void init_ardupilot()
      */
     timer_scheduler.set_failsafe(failsafe_check);
 
-    Serial.printf_P(PSTR("\nPress ENTER 3 times to start interactive setup\n\n"));
+    const prog_char_t *msg = PSTR("\nPress ENTER 3 times to start interactive setup\n");
+    cliSerial->println_P(msg);
+#if USB_MUX_PIN == 0
+    Serial3.println_P(msg);
+#endif
 
     if (ENABLE_AIR_START == 1) {
         // Perform an air start and get back to flying
@@ -232,9 +245,10 @@ static void init_ardupilot()
         //----------------
         //read_EEPROM_airstart_critical();
 #if HIL_MODE != HIL_MODE_ATTITUDE
-        imu.init(IMU::WARM_START, mavlink_delay, flash_leds, &timer_scheduler);
+        ins.init(AP_InertialSensor::WARM_START, 
+                 ins_sample_rate,
+                 mavlink_delay, flash_leds, &timer_scheduler);
 
-        // initialise ahrs (may push imu calibration into the mpu6000 if using that device).
         ahrs.init(&timer_scheduler);
         ahrs.set_fly_forward(true);
 #endif
@@ -286,10 +300,10 @@ static void startup_ground(void)
     // -----------------------
     demo_servos(1);
 
-    //IMU ground start
+    //INS ground start
     //------------------------
     //
-    startup_IMU_ground(false);
+    startup_INS_ground(false);
 
     // read the radio to set trims
     // ---------------------------
@@ -318,7 +332,7 @@ static void startup_ground(void)
     gcs_send_text_P(SEVERITY_LOW,PSTR("\n\n Ready to FLY."));
 }
 
-static void set_mode(byte mode)
+static void set_mode(enum FlightMode mode)
 {
     if(control_mode == mode) {
         // don't switch modes if we are already in the correct mode.
@@ -411,24 +425,28 @@ static void check_short_failsafe()
 }
 
 
-static void startup_IMU_ground(bool force_accel_level)
+static void startup_INS_ground(bool force_accel_level)
 {
     gcs_send_text_P(SEVERITY_MEDIUM, PSTR("Warming up ADC..."));
     mavlink_delay(500);
 
-    // Makes the servos wiggle twice - about to begin IMU calibration - HOLD LEVEL AND STILL!!
+    // Makes the servos wiggle twice - about to begin INS calibration - HOLD LEVEL AND STILL!!
     // -----------------------
     demo_servos(2);
-    gcs_send_text_P(SEVERITY_MEDIUM, PSTR("Beginning IMU calibration; do not move plane"));
+    gcs_send_text_P(SEVERITY_MEDIUM, PSTR("Beginning INS calibration; do not move plane"));
     mavlink_delay(1000);
 
-    imu.init(IMU::COLD_START, mavlink_delay, flash_leds, &timer_scheduler);
+    ins.init(AP_InertialSensor::COLD_START, 
+             ins_sample_rate,
+             mavlink_delay, flash_leds, &timer_scheduler);
+#if HIL_MODE == HIL_MODE_DISABLED
     if (force_accel_level || g.manual_level == 0) {
         // when MANUAL_LEVEL is set to 1 we don't do accelerometer
         // levelling on each boot, and instead rely on the user to do
         // it once via the ground station
-        imu.init_accel(mavlink_delay, flash_leds);
+        ins.init_accel(mavlink_delay, flash_leds);
     }
+#endif
     ahrs.set_fly_forward(true);
     ahrs.reset();
 
@@ -446,7 +464,7 @@ static void startup_IMU_ground(bool force_accel_level)
     }
 
 #endif
-    digitalWrite(B_LED_PIN, LED_ON);                    // Set LED B high to indicate IMU ready
+    digitalWrite(B_LED_PIN, LED_ON);                    // Set LED B high to indicate INS ready
     digitalWrite(A_LED_PIN, LED_OFF);
     digitalWrite(C_LED_PIN, LED_OFF);
 }
@@ -483,7 +501,6 @@ static void update_GPS_light(void)
 static void resetPerfData(void) {
     mainLoop_count                  = 0;
     G_Dt_max                                = 0;
-    imu.adc_constraints     = 0;
     ahrs.renorm_range_count         = 0;
     ahrs.renorm_blowup_count = 0;
     gps_fix_count                   = 0;
@@ -508,7 +525,7 @@ static uint32_t map_baudrate(int8_t rate, uint32_t default_baud)
     case 111:  return 111100;
     case 115:  return 115200;
     }
-    Serial.println_P(PSTR("Invalid SERIAL3_BAUD"));
+    cliSerial->println_P(PSTR("Invalid SERIAL3_BAUD"));
     return default_baud;
 }
 
@@ -552,21 +569,27 @@ uint16_t board_voltage(void)
 }
 
 
-#if CONFIG_APM_HARDWARE == APM_HARDWARE_APM2
 /*
   force a software reset of the APM
  */
 static void reboot_apm(void)
 {
-    Serial.println_P(PSTR("REBOOTING"));
-    delay(100);
+    cliSerial->printf_P(PSTR("REBOOTING\n"));
+    delay(100); // let serial flush
     // see http://www.arduino.cc/cgi-bin/yabb2/YaBB.pl?num=1250663814/
     // for the method
+#if CONFIG_APM_HARDWARE == APM_HARDWARE_APM2
+    // this relies on the bootloader resetting the watchdog, which
+    // APM1 doesn't do
     cli();
     wdt_enable(WDTO_15MS);
+#else
+    // this works on APM1
+    void (*fn)(void) = NULL;
+    fn();
+#endif
     while (1);
 }
-#endif
 
 
 static void
@@ -574,36 +597,36 @@ print_flight_mode(uint8_t mode)
 {
     switch (mode) {
     case MANUAL:
-        Serial.println_P(PSTR("Manual"));
+        cliSerial->println_P(PSTR("Manual"));
         break;
     case CIRCLE:
-        Serial.println_P(PSTR("Circle"));
+        cliSerial->println_P(PSTR("Circle"));
         break;
     case STABILIZE:
-        Serial.println_P(PSTR("Stabilize"));
+        cliSerial->println_P(PSTR("Stabilize"));
         break;
     case FLY_BY_WIRE_A:
-        Serial.println_P(PSTR("FBW_A"));
+        cliSerial->println_P(PSTR("FBW_A"));
         break;
     case FLY_BY_WIRE_B:
-        Serial.println_P(PSTR("FBW_B"));
+        cliSerial->println_P(PSTR("FBW_B"));
         break;
     case AUTO:
-        Serial.println_P(PSTR("AUTO"));
+        cliSerial->println_P(PSTR("AUTO"));
         break;
     case RTL:
-        Serial.println_P(PSTR("RTL"));
+        cliSerial->println_P(PSTR("RTL"));
         break;
     case LOITER:
-        Serial.println_P(PSTR("Loiter"));
+        cliSerial->println_P(PSTR("Loiter"));
         break;
     default:
-        Serial.println_P(PSTR("---"));
+        cliSerial->println_P(PSTR("---"));
         break;
     }
 }
 
 static void print_comma(void)
 {
-    Serial.print_P(PSTR(","));
+    cliSerial->print_P(PSTR(","));
 }

@@ -185,7 +185,7 @@ const AP_Param::Info var_info[] PROGMEM = {
     // @DisplayName: Waypoint Loiter Radius
     // @Description: Defines the distance from the waypoint center, the plane will maintain during a loiter
     // @Units: Meters
-    // @Range: 1 127
+    // @Range: 1 32767
     // @Increment: 1
     // @User: Standard
     GSCALAR(loiter_radius,          "WP_LOITER_RAD",  LOITER_RADIUS_DEFAULT),
@@ -273,8 +273,8 @@ const AP_Param::Info var_info[] PROGMEM = {
     GSCALAR(throttle_max,           "THR_MAX",        THROTTLE_MAX),
 
     // @Param: THR_SLEWRATE
-    // @DisplayName: Throttlw slew rate
-    // @Description: maximum percentage change in throttle per second
+    // @DisplayName: Throttle slew rate
+    // @Description: maximum percentage change in throttle per second. A setting of 10 means to not change the throttle by more than 10% of the full throttle range in one second
     // @Units: Percent
     // @Range: 0 100
     // @Increment: 1
@@ -287,6 +287,13 @@ const AP_Param::Info var_info[] PROGMEM = {
 	// @Values: 0:Disabled,1:Enabled
     // @User: Advanced
     GSCALAR(throttle_suppress_manual,"THR_SUPP_MAN",   0),
+
+    // @Param: THR_PASS_STAB
+    // @DisplayName: Throttle passthru in stabilize
+    // @Description: If this is set then when in STABILIZE or FBWA mode the throttle is a direct passthru from the transmitter. This means the THR_MIN and THR_MAX settings are not used in these modes. This is useful for petrol engines where you setup a throttle cut switch that suppresses the throttle below the normal minimum.
+	// @Values: 0:Disabled,1:Enabled
+    // @User: Advanced
+    GSCALAR(throttle_passthru_stabilize,"THR_PASS_STAB",   0),
 
     // @Param: THR_FAILSAFE
     // @DisplayName: Throttle Failsafe Enable
@@ -527,9 +534,51 @@ const AP_Param::Info var_info[] PROGMEM = {
 
     GSCALAR(battery_monitoring,     "BATT_MONITOR",   0),
     GSCALAR(volt_div_ratio,         "VOLT_DIVIDER",   VOLT_DIV_RATIO),
+
+    // @Param: APM_PER_VOLT
+    // @DisplayName: Apms per volt
+    // @Description: Number of amps that a 1V reading on the current sensor corresponds to
+    // @Units: A/V
+    // @User: Standard
     GSCALAR(curr_amp_per_volt,      "AMP_PER_VOLT",   CURR_AMP_PER_VOLT),
+
+    // @Param: AMP_OFFSET
+    // @DisplayName: AMP offset
+    // @Description: Voltage offset at zero current on current sensor
+    // @Units: Volts
+    // @User: Standard
+    GSCALAR(curr_amp_offset,        "AMP_OFFSET",     0),
+
     GSCALAR(input_voltage,          "INPUT_VOLTS",    INPUT_VOLTAGE),
-    GSCALAR(pack_capacity,          "BATT_CAPACITY",  HIGH_DISCHARGE),
+
+    // @Param: BATT_CAPACITY
+    // @DisplayName: Battery capacity
+    // @Description: Capacity of the battery in mAh when full
+    // @Units: mAh
+    // @User: Standard
+    GSCALAR(pack_capacity,          "BATT_CAPACITY",  1760),
+
+    // @Param: BATT_VOLT_PIN
+    // @DisplayName: Battery Voltage sensing pin
+    // @Description: Setting this to 0 ~ 13 will enable battery current sensing on pins A0 ~ A13.
+    // @Values: -1:Disabled, 0:A0, 1:A1, 13:A13
+    // @User: Standard
+    GSCALAR(battery_volt_pin,    "BATT_VOLT_PIN",    BATTERY_VOLT_PIN),
+
+    // @Param: BATT_CURR_PIN
+    // @DisplayName: Battery Current sensing pin
+    // @Description: Setting this to 0 ~ 13 will enable battery current sensing on pins A0 ~ A13.
+    // @Values: -1:Disabled, 1:A1, 2:A2, 12:A12
+    // @User: Standard
+    GSCALAR(battery_curr_pin,    "BATT_CURR_PIN",    BATTERY_CURR_PIN),
+
+    // @Param: RSSI_PIN
+    // @DisplayName: Receiver RSSI sensing pin
+    // @Description: This selects an analog pin for the receiver RSSI voltage. It assumes the voltage is 5V for max rssi, 0V for minimum
+    // @Values: -1:Disabled, 0:A0, 1:A1, 13:A13
+    // @User: Standard
+    GSCALAR(rssi_pin,            "RSSI_PIN",         -1),
+
     GSCALAR(inverted_flight_ch,     "INVERTEDFLT_CH", 0),
 
     // barometer ground calibration. The GND_ prefix is chosen for
@@ -611,15 +660,9 @@ const AP_Param::Info var_info[] PROGMEM = {
     GOBJECT(gcs0,                                   "SR0_",     GCS_MAVLINK),
     GOBJECT(gcs3,                                   "SR3_",     GCS_MAVLINK),
 
-#if HIL_MODE == HIL_MODE_DISABLED && CONFIG_APM_HARDWARE == APM_HARDWARE_APM1
     // @Group: INS_
-    // @Path: ../libraries/AP_InertialSensor/AP_InertialSensor_Oilpan.cpp
-    GOBJECT(ins,                            "INS_", AP_InertialSensor_Oilpan),
-#endif
-
-    // @Group: IMU_
-    // @Path: ../libraries/AP_IMU/IMU.cpp
-    GOBJECT(imu,                                    "IMU_",     IMU),
+    // @Path: ../libraries/AP_InertialSensor/AP_InertialSensor.cpp
+    GOBJECT(ins,                    "INS_", AP_InertialSensor),
 
     // @Group: AHRS_
     // @Path: ../libraries/AP_AHRS/AP_AHRS.cpp
@@ -661,17 +704,17 @@ static void load_parameters(void)
         g.format_version != Parameters::k_format_version) {
 
         // erase all parameters
-        Serial.printf_P(PSTR("Firmware change: erasing EEPROM...\n"));
+        cliSerial->printf_P(PSTR("Firmware change: erasing EEPROM...\n"));
         AP_Param::erase_all();
 
         // save the current format version
         g.format_version.set_and_save(Parameters::k_format_version);
-        Serial.println_P(PSTR("done."));
+        cliSerial->println_P(PSTR("done."));
     } else {
         uint32_t before = micros();
         // Load all auto-loaded EEPROM variables
         AP_Param::load_all();
 
-        Serial.printf_P(PSTR("load_all took %luus\n"), micros() - before);
+        cliSerial->printf_P(PSTR("load_all took %luus\n"), micros() - before);
     }
 }

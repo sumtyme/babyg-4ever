@@ -27,7 +27,7 @@
  #include "WProgram.h"
 #endif
 
-#if !defined(__AVR_ATmega1280__) && !defined(__AVR_ATmega2560__)
+#if !defined(__AVR_ATmega1280__) && !defined(__AVR_ATmega2560__) && !defined(DESKTOP_BUILD)
  # error Please check the Tools/Board menu to ensure you have selected Arduino Mega as your target.
 #else
 
@@ -55,15 +55,16 @@ void APM_RC_APM2::_timer5_capt_cb(void)
 
     // Was it a sync pulse? If so, reset frame.
     if ( pwidth > 8000 ) {
+        // pass through values if at least a minimum number of channels received
+        if( frame_idx >= MIN_CHANNELS ) {
+            _radio_status = 1;
+            _last_update = millis();
+        }
         frame_idx=0;
     } else {
         // Save pulse into _PWM_RAW array.
         if ( frame_idx < NUM_CHANNELS ) {
             _PWM_RAW[ frame_idx++ ] = pwidth;
-            // If this is the last pulse in a frame, set _radio_status.
-            if (frame_idx >= NUM_CHANNELS) {
-                _radio_status = 1;
-            }
         }
     }
     // Save icr for next call.
@@ -240,11 +241,16 @@ uint16_t APM_RC_APM2::InputCh(unsigned char ch)
         return _HIL_override[ch];
     }
 
-    // we need to block interrupts during the read of a 16 bit
+    // We need to block ICP5 interrupts during the read of 16 bit PWM values
+    uint8_t _timsk5 = TIMSK5;
+    TIMSK5 &= ~(1<<ICIE5);
+
     // value
-    cli();
     result = _PWM_RAW[ch];
-    sei();
+
+    // Enable ICP5 interrupt if previously active
+    TIMSK5 = _timsk5;
+    
     // Because timer runs at 0.5us we need to do value/2
     result >>= 1;
 
@@ -303,12 +309,13 @@ bool APM_RC_APM2::setHIL(int16_t v[NUM_CHANNELS])
             sum++;
         }
     }
+    _radio_status = 1;
+    _last_update = millis();
     if (sum == 0) {
         return 0;
     } else {
         return 1;
     }
-    _radio_status = 1;
 }
 
 void APM_RC_APM2::clearOverride(void)

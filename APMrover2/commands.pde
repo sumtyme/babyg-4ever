@@ -2,8 +2,6 @@
 
 /* Functions in this file:
 	void init_commands()
-	void update_auto()
-	void reload_commands()
 	struct Location get_cmd_with_index(int i)
 	void set_cmd_with_index(struct Location temp, int i)
 	void increment_cmd_index()
@@ -22,34 +20,6 @@ static void init_commands()
 	nav_command_ID	= NO_COMMAND;
 	non_nav_command_ID	= NO_COMMAND;
 	next_nav_command.id 	= CMD_BLANK;
-}
-
-static void update_auto()
-{
-	if (g.command_index >= g.command_total) {
-		handle_no_commands();
-		if(g.command_total == 0) {
-			next_WP.lat 		= home.lat + 1000;	// so we don't have bad calcs
-			next_WP.lng 		= home.lng + 1000;	// so we don't have bad calcs
-		}
-	} else {
-    	if(g.command_index != 0) {
-    		g.command_index = nav_command_index;
-    		nav_command_index--;
-    	}
-		nav_command_ID	= NO_COMMAND;
-		non_nav_command_ID	= NO_COMMAND;
-		next_nav_command.id 	= CMD_BLANK;
-		process_next_command();
-	}
-}
-
-// Reload all the wp
-static void reload_commands()
-{
-	init_commands();
-	g.command_index.load();        // XXX can we assume it's been loaded already by ::load_all?
-	decrement_cmd_index();
 }
 
 // Getters
@@ -98,7 +68,7 @@ static struct Location get_cmd_with_index(int i)
 static void set_cmd_with_index(struct Location temp, int i)
 {
 	i = constrain(i, 0, g.command_total.get());
-	uint32_t mem = WP_START_BYTE + (i * WP_SIZE);
+	intptr_t mem = WP_START_BYTE + (i * WP_SIZE);
 
 	// Set altitude options bitmask
 	// XXX What is this trying to do?
@@ -126,29 +96,6 @@ static void set_cmd_with_index(struct Location temp, int i)
 	eeprom_write_dword((uint32_t *)	mem, temp.lng);
 }
 
-static void increment_cmd_index()
-{
-    if (g.command_index <= g.command_total) {
-      g.command_index.set_and_save(g.command_index + 1);
-   }
-}
-
-static void decrement_cmd_index()
-{
-    if (g.command_index > 0) {
-        g.command_index.set_and_save(g.command_index - 1);
-    }
-}
-
-static long read_alt_to_hold()
-{
-	if(g.RTL_altitude < 0)
-		return current_loc.alt;
-	else
-		return g.RTL_altitude + home.alt;
-}
-
-
 /*
 This function stores waypoint commands
 It looks to see what the next command type is and finds the last command.
@@ -163,33 +110,21 @@ static void set_next_WP(struct Location *wp)
 	// ---------------------
 	next_WP = *wp;
 
-	// used to control FBW and limit the rate of climb
-	// -----------------------------------------------
-	target_altitude = current_loc.alt;
+    // are we already past the waypoint? This happens when we jump
+    // waypoints, and it can cause us to skip a waypoint. If we are
+    // past the waypoint when we start on a leg, then use the current
+    // location as the previous waypoint, to prevent immediately
+    // considering the waypoint complete
+    if (location_passed_point(current_loc, prev_WP, next_WP)) {
+        gcs_send_text_P(SEVERITY_LOW, PSTR("Resetting prev_WP"));
+        prev_WP = current_loc;
+    }
 
-	if(prev_WP.id != MAV_CMD_NAV_TAKEOFF && prev_WP.alt != home.alt && (next_WP.id == MAV_CMD_NAV_WAYPOINT || next_WP.id == MAV_CMD_NAV_LAND))
-		offset_altitude = next_WP.alt - prev_WP.alt;
-	else
-		offset_altitude = 0;
-
-	// zero out our loiter vals to watch for missed waypoints
-	loiter_delta 		= 0;
-	loiter_sum 			= 0;
-	loiter_total 		= 0;
-
-	// this is used to offset the shrinking longitude as we go towards the poles
-	float rads 			= (fabs((float)next_WP.lat)/t7) * 0.0174532925;
-	scaleLongDown 		= cos(rads);
-	scaleLongUp 		= 1.0f/cos(rads);	
 	// this is handy for the groundstation
 	wp_totalDistance 	= get_distance(&current_loc, &next_WP);
 	wp_distance 		= wp_totalDistance;
 	target_bearing 		= get_bearing_cd(&current_loc, &next_WP);
 	nav_bearing 		= target_bearing;
-
-	// to check if we have missed the WP
-	// ----------------------------
-	old_target_bearing 	= target_bearing;
 
 	// set a new crosstrack bearing
 	// ----------------------------
@@ -206,24 +141,10 @@ static void set_guided_WP(void)
 	// ---------------------
 	next_WP = guided_WP;
 
-	// used to control FBW and limit the rate of climb
-	// -----------------------------------------------
-	target_altitude = current_loc.alt;
-	offset_altitude = next_WP.alt - prev_WP.alt;
-
-	// this is used to offset the shrinking longitude as we go towards the poles
-	float rads 		= (abs(next_WP.lat)/t7) * 0.0174532925;
-	scaleLongDown 		= cos(rads);
-	scaleLongUp 		= 1.0f/cos(rads);
-
 	// this is handy for the groundstation
 	wp_totalDistance 	= get_distance(&current_loc, &next_WP);
 	wp_distance 		= wp_totalDistance;
 	target_bearing 		= get_bearing_cd(&current_loc, &next_WP);
-
-	// to check if we have missed the WP
-	// ----------------------------
-	old_target_bearing 	= target_bearing;
 
 	// set a new crosstrack bearing
 	// ----------------------------
@@ -234,39 +155,20 @@ static void set_guided_WP(void)
 // -------------------------------
 void init_home()
 {
+    if (!have_position) {
+        // we need position information
+        return;
+    }
+
 	gcs_send_text_P(SEVERITY_LOW, PSTR("init home"));
 
-	// block until we get a good fix
-	// -----------------------------
-	while (!g_gps->new_data || !g_gps->fix) {
-		g_gps->update();
-	}
-
 	home.id 	= MAV_CMD_NAV_WAYPOINT;
-#if HIL_MODE != HIL_MODE_ATTITUDE
 
 	home.lng 	= g_gps->longitude;				// Lon * 10**7
 	home.lat 	= g_gps->latitude;				// Lat * 10**7
-        gps_base_alt    = max(g_gps->altitude, 0);
-        home.alt        = g_gps->altitude;;
-  					// Home is always 0
-#else
-//	struct Location temp = get_cmd_with_index(0);    // JLN update - for HIL test only get the home param stored in the FPL
-//        if (temp.alt > 0) {
-//        	home.lng 	= temp.lng;			 // Lon * 10**7
-//        	home.lat 	= temp.lat;			 // Lat * 10**7
-//        } else {
-        	home.lng 	= g_gps->longitude;		 // Lon * 10**7
-        	home.lat 	= g_gps->latitude;		 // Lat * 10**7       
-//        }
-        
-         gps_base_alt    = g_gps->altitude;;             // get the stored home altitude as the base ref for AGL calculation.
-         home.alt        = g_gps->altitude;;
-
-#endif
+    gps_base_alt    = max(g_gps->altitude, 0);
+    home.alt        = g_gps->altitude;
 	home_is_set = true;
-
-        //gcs_send_text_fmt(PSTR("gps alt: %lu"), (unsigned long)home.alt);
 
 	// Save Home to EEPROM - Command 0
 	// -------------------
@@ -279,15 +181,13 @@ void init_home()
 	// Load home for a default guided_WP
 	// -------------
 	guided_WP = home;
-	guided_WP.alt += g.RTL_altitude;
-
 }
 
 static void restart_nav()
 {  
-  reset_I();
-  prev_WP = current_loc;
-  nav_command_ID = NO_COMMAND;
-  nav_command_index = 0;
-  process_next_command();
+    reset_I();
+    prev_WP = current_loc;
+    nav_command_ID = NO_COMMAND;
+    nav_command_index = 0;
+    process_next_command();
 }

@@ -14,12 +14,15 @@ namespace ArdupilotMega
     {
         private static readonly ILog log = LogManager.GetLogger("Program");
 
+        public static Splash Splash;
         /// <summary>
         /// The main entry point for the application.
         /// </summary>
         [STAThread]
         static void Main()
         {
+
+            Console.WriteLine("If your error is about Microsoft.DirectX.DirectInput, please install the latest directx redist from here http://www.microsoft.com/en-us/download/details.aspx?id=35 \n\n");
 
             Application.EnableVisualStyles();
             XmlConfigurator.Configure();
@@ -38,7 +41,7 @@ namespace ArdupilotMega
 
             //Common.linearRegression();
 
-            Console.WriteLine(srtm.getAltitude(-35.115676879882812, 117.94178754638671,20));
+            //Console.WriteLine(srtm.getAltitude(-35.115676879882812, 117.94178754638671,20));
 
            // Console.ReadLine();
            // return;
@@ -119,6 +122,9 @@ namespace ArdupilotMega
             }
             */
 
+            Splash = new ArdupilotMega.Splash();
+            Splash.Show();
+
             try
             {
                 Thread.CurrentThread.Name = "Base Thread";
@@ -127,14 +133,10 @@ namespace ArdupilotMega
             }
             catch (Exception ex)
             {
-                if (ex.GetType() == typeof(FileNotFoundException))
-                {
-                    Console.WriteLine("If your error is about Microsoft.DirectX.DirectInput, please install the latest directx redist from here http://www.microsoft.com/en-us/download/details.aspx?id=35 \n\n");
-                }
-
                 log.Fatal("Fatal app exception", ex);
                 Console.WriteLine(ex.ToString());
 
+                Console.WriteLine("\nPress any key to exit!");
                 Console.ReadLine();
             }
         }
@@ -196,13 +198,23 @@ namespace ArdupilotMega
             {
                 try
                 {
+                    string data = "";
+                        foreach (System.Collections.DictionaryEntry de in ex.Data)
+                            data += String.Format("-> {0}: {1}", de.Key, de.Value);
+              
+
                     // Create a request using a URL that can receive a post. 
                     WebRequest request = WebRequest.Create("http://vps.oborne.me/mail.php");
                     request.Timeout = 10000; // 10 sec
                     // Set the Method property of the request to POST.
                     request.Method = "POST";
                     // Create POST data and convert it to a byte array.
-                    string postData = "message=" + Environment.OSVersion.VersionString + " " + System.Reflection.Assembly.GetExecutingAssembly().GetName().Version.ToString() + " " + Application.ProductVersion + " Exception " + ex.ToString().Replace('&', ' ').Replace('=', ' ') + " Stack: " + ex.StackTrace.ToString().Replace('&', ' ').Replace('=', ' ');
+                    string postData = "message=" + Environment.OSVersion.VersionString + " " + System.Reflection.Assembly.GetExecutingAssembly().GetName().Version.ToString() 
+                        + " " + Application.ProductVersion 
+                        + "\nException " + ex.ToString().Replace('&', ' ').Replace('=', ' ') 
+                        + "\nStack: " + ex.StackTrace.ToString().Replace('&', ' ').Replace('=', ' ') 
+                        + "\nTargetSite " + ex.TargetSite + " " + ex.TargetSite.DeclaringType
+                        + "\ndata " + data;
                     byte[] byteArray = Encoding.ASCII.GetBytes(postData);
                     // Set the ContentType property of the WebRequest.
                     request.ContentType = "application/x-www-form-urlencoded";

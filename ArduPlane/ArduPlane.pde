@@ -1,6 +1,6 @@
 /// -*- tab-width: 4; Mode: C++; c-basic-offset: 4; indent-tabs-mode: nil -*-
 
-#define THISFIRMWARE "ArduPlane V2.65"
+#define THISFIRMWARE "ArduPlane V2.68"
 /*
  *  Authors:    Doug Weibel, Jose Julio, Jordi Munoz, Jason Short, Andrew Tridgell, Randy Mackay, Pat Hickey, John Arne Birkeland, Olivier Adler, Amilcar Lucas, Gregory Fletcher
  *  Thanks to:  Chris Anderson, Michael Oborne, Paul Mather, Bill Premerlani, James Cohen, JB from rotorFX, Automatik, Fefenin, Peter Meister, Remzibi, Yury Smirnov, Sandro Benigno, Max Levine, Roberto Navoni, Lorenz Meier, Yury MonZon
@@ -27,6 +27,7 @@
 // Libraries
 #include <FastSerial.h>
 #include <AP_Common.h>
+#include <AP_Menu.h>
 #include <Arduino_Mega_ISR_Registry.h>
 #include <APM_RC.h>         // ArduPilot Mega RC Library
 #include <AP_GPS.h>         // ArduPilot GPS library
@@ -40,13 +41,13 @@
 #include <AP_Baro.h>        // ArduPilot barometer library
 #include <AP_Compass.h>     // ArduPilot Mega Magnetometer Library
 #include <AP_Math.h>        // ArduPilot Mega Vector/Matrix math Library
-#include <AP_InertialSensor.h> // Inertial Sensor (uncalibrated IMU) Library
-#include <AP_IMU.h>         // ArduPilot Mega IMU Library
+#include <AP_InertialSensor.h> // Inertial Sensor Library
 #include <AP_AHRS.h>         // ArduPilot Mega DCM Library
 #include <PID.h>            // PID library
 #include <RC_Channel.h>     // RC Channel Library
 #include <AP_RangeFinder.h>     // Range finder library
 #include <Filter.h>                     // Filter library
+#include <AP_Buffer.h>      // APM FIFO Buffer
 #include <ModeFilter.h>         // Mode Filter from Filter library
 #include <LowPassFilter.h>      // LowPassFilter class (inherits from Filter class)
 #include <AP_Relay.h>       // APM relay
@@ -90,6 +91,9 @@ FastSerialPort2(Serial3);
 FastSerialPort3(Serial3);        // Telemetry port for APM1
 #endif
 
+// port to use for command line interface
+static FastSerial *cliSerial = &Serial;
+
 // this sets up the parameter table, and sets the default values. This
 // must be the first AP_Param variable declared to ensure its
 // constructor runs before the constructors of the other AP_Param
@@ -101,6 +105,11 @@ AP_Param param_loader(var_info, WP_START_BYTE);
  #include <APM_OBC.h>
 APM_OBC obc;
 #endif
+
+////////////////////////////////////////////////////////////////////////////////
+// the rate we run the main loop at
+////////////////////////////////////////////////////////////////////////////////
+static const AP_InertialSensor::Sample_rate ins_sample_rate = AP_InertialSensor::RATE_50HZ;
 
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -214,37 +223,28 @@ AP_GPS_None     g_gps_driver(NULL);
   #error Unrecognised GPS_PROTOCOL setting.
  #endif // GPS PROTOCOL
 
- # if CONFIG_IMU_TYPE == CONFIG_IMU_MPU6000
+ # if CONFIG_INS_TYPE == CONFIG_INS_MPU6000
 AP_InertialSensor_MPU6000 ins;
  # else
 AP_InertialSensor_Oilpan ins( &adc );
- #endif // CONFIG_IMU_TYPE
-AP_IMU_INS imu( &ins );
+ #endif // CONFIG_INS_TYPE
 
-AP_AHRS_DCM ahrs(&imu, g_gps);
+AP_AHRS_DCM ahrs(&ins, g_gps);
 
 #elif HIL_MODE == HIL_MODE_SENSORS
 // sensor emulators
-AP_ADC_HIL adc;
 AP_Baro_BMP085_HIL barometer;
 AP_Compass_HIL compass;
 AP_GPS_HIL              g_gps_driver(NULL);
-AP_InertialSensor_Oilpan ins( &adc );
-AP_IMU_Shim imu;
-AP_AHRS_DCM  ahrs(&imu, g_gps);
+AP_InertialSensor_Stub ins;
+AP_AHRS_DCM  ahrs(&ins, g_gps);
 
 #elif HIL_MODE == HIL_MODE_ATTITUDE
-AP_ADC_HIL adc;
-AP_IMU_Shim imu;             // never used
-AP_AHRS_HIL             ahrs(&imu, g_gps);
-AP_GPS_HIL              g_gps_driver(NULL);
-AP_Compass_HIL compass;          // never used
 AP_Baro_BMP085_HIL barometer;
- #ifdef DESKTOP_BUILD
-  #include <SITL.h>
-SITL sitl;
-AP_InertialSensor_Oilpan ins( &adc );
- #endif
+AP_Compass_HIL compass;
+AP_GPS_HIL              g_gps_driver(NULL);
+AP_InertialSensor_Stub ins;
+AP_AHRS_HIL   ahrs(&ins, g_gps);
 
 #else
  #error Unrecognised HIL_MODE setting.
@@ -273,9 +273,9 @@ AP_AnalogSource_ADC pitot_analog_source( &adc,
 AP_AnalogSource_Arduino pitot_analog_source(CONFIG_PITOT_SOURCE_ANALOG_PIN, 4.0);
 #endif
 
-#if RECEIVER_RSSI_PIN != -1
-AP_AnalogSource_Arduino RSSI_pin(RECEIVER_RSSI_PIN, 0.25);
-#endif
+// a pin for reading the receiver RSSI voltage. The scaling by 0.25 
+// is to take the 0 to 1024 range down to an 8 bit range for MAVLink
+AP_AnalogSource_Arduino RSSI_pin(-1, 0.25);
 
 AP_Relay relay;
 
@@ -309,7 +309,7 @@ static bool usb_connected;
 ////////////////////////////////////////////////////////////////////////////////
 // This is the state of the flight control system
 // There are multiple states defined such as MANUAL, FBW-A, AUTO
-byte control_mode        = INITIALISING;
+enum FlightMode control_mode  = INITIALISING;
 // Used to maintain the state of the previous control switch position
 // This is set to -1 when we need to re-read the switch
 byte oldSwitchPosition;
@@ -479,7 +479,7 @@ AP_Airspeed airspeed(&pitot_analog_source);
 ////////////////////////////////////////////////////////////////////////////////
 // flight mode specific
 ////////////////////////////////////////////////////////////////////////////////
-// Flag for using gps ground course instead of IMU yaw.  Set false when takeoff command in process.
+// Flag for using gps ground course instead of INS yaw.  Set false when takeoff command in process.
 static bool takeoff_complete    = true;
 // Flag to indicate if we have landed.
 //Set land_complete if we are within 2 seconds distance or within 3 meters altitude of touchdown
@@ -604,7 +604,7 @@ static int32_t target_altitude_cm;
 static int32_t offset_altitude_cm;
 
 ////////////////////////////////////////////////////////////////////////////////
-// IMU variables
+// INS variables
 ////////////////////////////////////////////////////////////////////////////////
 // The main loop execution time.  Seconds
 //This is the time between calls to the DCM algorithm and is the Integration time for the gyros.
@@ -688,8 +688,8 @@ void setup() {
 void loop()
 {
     // We want this to execute at 50Hz, but synchronised with the gyro/accel
-    uint16_t num_samples = imu.num_samples_available();
-    if (num_samples >= NUM_IMU_SAMPLES_FOR_50HZ) {
+    uint16_t num_samples = ins.num_samples_available();
+    if (num_samples >= 1) {
         delta_ms_fast_loop      = millis() - fast_loopTimer_ms;
         load                = (float)(fast_loopTimeStamp_ms - fast_loopTimer_ms)/delta_ms_fast_loop;
         G_Dt                = (float)delta_ms_fast_loop / 1000.f;
@@ -714,17 +714,14 @@ void loop()
         if (millis() - perf_mon_timer > 20000) {
             if (mainLoop_count != 0) {
                 if (g.log_bitmask & MASK_LOG_PM)
-#if HIL_MODE != HIL_MODE_ATTITUDE
                     Log_Write_Performance();
-#endif
-
                     resetPerfData();
             }
         }
 
         fast_loopTimeStamp_ms = millis();
-    } else if (num_samples < NUM_IMU_SAMPLES_FOR_50HZ-1) {
-        // less than 20ms has passed. We have at least one millisecond
+    } else if (millis() - fast_loopTimeStamp_ms < 19) {
+        // less than 19ms has passed. We have at least one millisecond
         // of free time. The most useful thing to do with that time is
         // to accumulate some sensor readings, specifically the
         // compass, which is often very noisy but is not interrupt
@@ -765,13 +762,11 @@ static void fast_loop()
     // uses the yaw from the DCM to give more accurate turns
     calc_bearing_error();
 
-# if HIL_MODE == HIL_MODE_DISABLED
     if (g.log_bitmask & MASK_LOG_ATTITUDE_FAST)
         Log_Write_Attitude(ahrs.roll_sensor, ahrs.pitch_sensor, ahrs.yaw_sensor);
 
     if (g.log_bitmask & MASK_LOG_RAW)
         Log_Write_Raw();
-#endif
 
     // inertial navigation
     // ------------------
@@ -830,15 +825,6 @@ static void medium_loop()
             ahrs.set_compass(NULL);
         }
 #endif
-/*{
- *  Serial.print(ahrs.roll_sensor, DEC);	Serial.printf_P(PSTR("\t"));
- *  Serial.print(ahrs.pitch_sensor, DEC);	Serial.printf_P(PSTR("\t"));
- *  Serial.print(ahrs.yaw_sensor, DEC);	Serial.printf_P(PSTR("\t"));
- *  Vector3f tempaccel = imu.get_accel();
- *  Serial.print(tempaccel.x, DEC);	Serial.printf_P(PSTR("\t"));
- *  Serial.print(tempaccel.y, DEC);	Serial.printf_P(PSTR("\t"));
- *  Serial.println(tempaccel.z, DEC);
- *  }*/
 
         break;
 
@@ -891,13 +877,11 @@ static void medium_loop()
     case 3:
         medium_loopCounter++;
 
-#if HIL_MODE != HIL_MODE_ATTITUDE
         if ((g.log_bitmask & MASK_LOG_ATTITUDE_MED) && !(g.log_bitmask & MASK_LOG_ATTITUDE_FAST))
             Log_Write_Attitude(ahrs.roll_sensor, ahrs.pitch_sensor, ahrs.yaw_sensor);
 
         if (g.log_bitmask & MASK_LOG_CTUN)
             Log_Write_Control_Tuning();
-#endif
 
         if (g.log_bitmask & MASK_LOG_NTUN)
             Log_Write_Nav_Tuning();
@@ -1202,6 +1186,10 @@ static void update_current_flight_mode(void)
             break;
             //roll: -13788.000,  pitch: -13698.000,   thr: 0.000, rud: -13742.000
 
+        case INITIALISING:
+        case AUTO:
+            // handled elsewhere
+            break;
         }
     }
 }
@@ -1212,19 +1200,26 @@ static void update_navigation()
     // ------------------------------------------------------------------------
 
     // distance and bearing calcs only
-    if(control_mode == AUTO) {
+    switch(control_mode) {
+    case AUTO:
         verify_commands();
-    }else{
+        break;
+            
+    case LOITER:
+    case RTL:
+    case GUIDED:
+        update_loiter();
+        calc_bearing_error();
+        break;
 
-        switch(control_mode) {
-        case LOITER:
-        case RTL:
-        case GUIDED:
-            update_loiter();
-            calc_bearing_error();
-            break;
-
-        }
+    case MANUAL:
+    case INITIALISING:
+    case FLY_BY_WIRE_A:
+    case FLY_BY_WIRE_B:
+    case CIRCLE:
+    case STABILIZE:
+        // nothing to do
+        break;
     }
 }
 

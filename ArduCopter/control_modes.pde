@@ -1,26 +1,33 @@
 /// -*- tab-width: 4; Mode: C++; c-basic-offset: 4; indent-tabs-mode: nil -*-
 
+#define CONTROL_SWITCH_COUNTER  10  // 10 iterations at 100hz (i.e. 1/10th of a second) at a new switch position will cause flight mode change
 static void read_control_switch()
 {
-    static bool switch_debouncer = false;
+    static uint8_t switch_counter = 0;
 
     byte switchPosition = readSwitch();
 
     if (oldSwitchPosition != switchPosition) {
-        if(switch_debouncer) {
+        switch_counter++;
+        if(switch_counter >= CONTROL_SWITCH_COUNTER) {
             oldSwitchPosition       = switchPosition;
-            switch_debouncer        = false;
+            switch_counter          = 0;
 
-            set_mode(flight_modes[switchPosition]);
+            // ignore flight mode changes if in failsafe
+            if( !ap.failsafe ) {
+                set_mode(flight_modes[switchPosition]);
 
-            if(g.ch7_option != CH7_SIMPLE_MODE) {
-                // set Simple mode using stored paramters from Mission planner
-                // rather than by the control switch
-                do_simple = (g.simple_modes & (1 << switchPosition));
+                if(g.ch7_option != CH7_SIMPLE_MODE) {
+                    // set Simple mode using stored paramters from Mission planner
+                    // rather than by the control switch
+                    set_simple_mode(g.simple_modes & (1 << switchPosition));
+                }
             }
-        }else{
-            switch_debouncer        = true;
         }
+    }else{
+        // reset switch_counter if there's been no change
+        // we don't want 10 intermittant blips causing a flight mode change
+        switch_counter = 0;
     }
 }
 
@@ -30,8 +37,8 @@ static byte readSwitch(void){
     if (pulsewidth > 1230 && pulsewidth <= 1360) return 1;
     if (pulsewidth > 1360 && pulsewidth <= 1490) return 2;
     if (pulsewidth > 1490 && pulsewidth <= 1620) return 3;
-    if (pulsewidth > 1620 && pulsewidth <= 1749) return 4;              // Software Manual
-    if (pulsewidth >= 1750) return 5;                                                           // Hardware Manual
+    if (pulsewidth > 1620 && pulsewidth <= 1749) return 4;
+    if (pulsewidth >= 1750) return 5;
     return 0;
 }
 
@@ -60,29 +67,30 @@ static void read_trim_switch()
     }
 
     if(option == CH7_SIMPLE_MODE) {
-        do_simple = (g.rc_7.radio_in > CH_7_PWM_TRIGGER);
+        //ap.simple_mode = (g.rc_7.radio_in > CH_7_PWM_TRIGGER);
+        set_simple_mode(g.rc_7.radio_in > CH_7_PWM_TRIGGER);
 
     }else if (option == CH7_FLIP) {
-        if (CH7_flag == false && g.rc_7.radio_in > CH_7_PWM_TRIGGER) {
-            CH7_flag = true;
+        if (ap_system.CH7_flag == false && g.rc_7.radio_in > CH_7_PWM_TRIGGER) {
+            ap_system.CH7_flag = true;
 
             // don't flip if we accidentally engaged flip, but didn't notice and tried to takeoff
-            if(g.rc_3.control_in != 0 && takeoff_complete) {
+            if(g.rc_3.control_in != 0 && ap.takeoff_complete) {
                 init_flip();
             }
         }
-        if (CH7_flag == true && g.rc_7.control_in < 800) {
-            CH7_flag = false;
+        if (ap_system.CH7_flag == true && g.rc_7.control_in < 800) {
+            ap_system.CH7_flag = false;
         }
 
     }else if (option == CH7_RTL) {
-        if (CH7_flag == false && g.rc_7.radio_in > CH_7_PWM_TRIGGER) {
-            CH7_flag = true;
+        if (ap_system.CH7_flag == false && g.rc_7.radio_in > CH_7_PWM_TRIGGER) {
+            ap_system.CH7_flag = true;
             set_mode(RTL);
         }
 
-        if (CH7_flag == true && g.rc_7.control_in < 800) {
-            CH7_flag = false;
+        if (ap_system.CH7_flag == true && g.rc_7.control_in < 800) {
+            ap_system.CH7_flag = false;
             if (control_mode == RTL || control_mode == LOITER) {
                 reset_control_switch();
             }
@@ -90,11 +98,11 @@ static void read_trim_switch()
 
     }else if (option == CH7_SAVE_WP) {
         if (g.rc_7.radio_in > CH_7_PWM_TRIGGER) {        // switch is engaged
-            CH7_flag = true;
+            ap_system.CH7_flag = true;
 
         }else{         // switch is disengaged
-            if(CH7_flag) {
-                CH7_flag = false;
+            if(ap_system.CH7_flag) {
+                ap_system.CH7_flag = false;
 
                 if(control_mode == AUTO) {
                     // reset the mission
@@ -148,102 +156,37 @@ static void read_trim_switch()
             }
         }
     }else if (option == CH7_AUTO_TRIM) {
-        if (g.rc_7.radio_in > CH_7_PWM_TRIGGER) {
-            auto_level_counter = 10;
+        if(g.rc_7.radio_in > CH_7_PWM_TRIGGER && control_mode <= ACRO && g.rc_3.control_in == 0) {
+            save_trim_counter = 15;
         }
     }
 }
 
-static void auto_trim()
+// save_trim - adds roll and pitch trims from the radio to ahrs
+static void save_trim()
 {
-    if(auto_level_counter > 0) {
-        //g.rc_1.dead_zone = 60;		// 60 = .6 degrees
-        //g.rc_2.dead_zone = 60;
+    float roll_trim, pitch_trim;
 
-        auto_level_counter--;
+    if(save_trim_counter > 0) {
+        save_trim_counter--;
 
-        if( motors.armed() ) {
-            // set high AHRS gains to force accelerometers to impact attitude estimate
-            ahrs.set_fast_gains(true);
-#if SECONDARY_DMP_ENABLED == ENABLED
-            ahrs2.set_fast_gains(true);
-#endif
-        }
+        // first few iterations we simply flash the leds
+        led_mode = SAVE_TRIM_LEDS;
 
-        trim_accel();
-        led_mode = AUTO_TRIM_LEDS;
-        do_simple = false;
-
-        if(auto_level_counter == 1) {
-            //g.rc_1.dead_zone = 0;		// 60 = .6 degrees
-            //g.rc_2.dead_zone = 0;
-            led_mode = NORMAL_LEDS;
-            clear_leds();
-            imu.save();
+        if(save_trim_counter == 1) {
+            // save roll trim
+            roll_trim = ToRad((float)g.rc_1.control_in/100.0);
+            pitch_trim = ToRad((float)g.rc_2.control_in/100.0);
+            ahrs.add_trim(roll_trim, pitch_trim);
 
             reset_control_switch();
 
-            // go back to normal AHRS gains
-            if( motors.armed() ) {
-                ahrs.set_fast_gains(false);
-#if SECONDARY_DMP_ENABLED == ENABLED
-                ahrs2.set_fast_gains(false);
-#endif
-            }
+            // switch back leds to normal
+            led_mode = NORMAL_LEDS;
 
-            //Serial.println("Done");
-            auto_level_counter = 0;
+            save_trim_counter = 0;
         }
     }
 }
 
-
-/*
- *  How this works:
- *  Level Example:
- *  A_off: -14.00, -20.59, -30.80
- *
- *  Right roll Example:
- *  A_off: -6.73, 89.05, -46.02
- *
- *  Left Roll Example:
- *  A_off: -18.11, -160.31, -56.42
- *
- *  Pitch Forward:
- *  A_off: -127.00, -22.16, -50.09
- *
- *  Pitch Back:
- *  A_off: 201.95, -24.00, -88.56
- */
-
-static void trim_accel()
-{
-    reset_stability_I();
-
-    float trim_roll  = (float)g.rc_1.control_in / 30000.0;
-    float trim_pitch = (float)g.rc_2.control_in / 30000.0;
-
-    trim_roll       = constrain(trim_roll, -1.5, 1.5);
-    trim_pitch      = constrain(trim_pitch, -1.5, 1.5);
-
-    if(g.rc_1.control_in > 200) {    // Roll Right
-        imu.ay(imu.ay() - trim_roll);
-    }else if (g.rc_1.control_in < -200) {
-        imu.ay(imu.ay() - trim_roll);
-    }
-
-    if(g.rc_2.control_in > 200) {    // Pitch Back
-        imu.ax(imu.ax() + trim_pitch);
-    }else if (g.rc_2.control_in < -200) {
-        imu.ax(imu.ax() + trim_pitch);
-    }
-
-    /*
-     *  Serial.printf_P(PSTR("r:%1.2f  %1.2f \t| p:%1.2f  %1.2f\n"),
-     *                                               trim_roll,
-     *                                               (float)imu.ay(),
-     *                                               trim_pitch,
-     *                                               (float)imu.ax());
-     *  //*/
-}
 
