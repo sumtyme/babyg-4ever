@@ -83,6 +83,22 @@
  # define TOY_MIXER      TOY_LINEAR_MIXER
 #endif
 
+/////////////////////////////////////////////////////////////////////////////////
+// Bulk defines for TradHeli
+#if FRAME_CONFIG == HELI_FRAME
+  # define RC_FAST_SPEED 				125
+  # define RTL_YAW                  	YAW_LOOK_AT_HOME
+  # define TILT_COMPENSATION 			5
+  # define RATE_INTEGRATOR_LEAK_RATE 	0.02
+  # define RATE_ROLL_D    				0
+  # define RATE_PITCH_D       			0
+  # define HELI_PITCH_FF				0
+  # define HELI_ROLL_FF					0
+  # define HELI_YAW_FF					0  
+  # define RC_FAST_SPEED 				125
+ #endif
+
+
 // optical flow doesn't work in SITL yet
 #ifdef DESKTOP_BUILD
 # define OPTFLOW DISABLED
@@ -111,11 +127,7 @@
 // PWM control
 // default RC speed in Hz
 #ifndef RC_FAST_SPEED
- # if FRAME_CONFIG == HELI_FRAME
-  #   define RC_FAST_SPEED 125
- # else
-  #   define RC_FAST_SPEED 490
- # endif
+   #   define RC_FAST_SPEED 490
 #endif
 
 ////////////////////////////////////////////////////////
@@ -235,15 +247,7 @@
 #endif
 
 //////////////////////////////////////////////////////////////////////////////
-// Channel Config (custom MOT channel mappings)
-//
-
-#ifndef CONFIG_CHANNELS
- # define CONFIG_CHANNELS CHANNEL_CONFIG_DEFAULT
-#endif
-
-//////////////////////////////////////////////////////////////////////////////
-// Acrobatics
+// Channel 7 default option
 //
 
 #ifndef CH7_OPTION
@@ -545,7 +549,7 @@
 
 // AUTO Mode
 #ifndef AUTO_YAW
- # define AUTO_YAW                  YAW_AUTO
+ # define AUTO_YAW                  YAW_LOOK_AT_NEXT_WP
 #endif
 
 #ifndef AUTO_RP
@@ -558,7 +562,7 @@
 
 // CIRCLE Mode
 #ifndef CIRCLE_YAW
- # define CIRCLE_YAW             	YAW_AUTO
+ # define CIRCLE_YAW             	YAW_LOOK_AT_NEXT_WP
 #endif
 
 #ifndef CIRCLE_RP
@@ -698,8 +702,8 @@
  # define STABILIZE_YAW_IMAX        8.0            // degrees * 100
 #endif
 
-#ifndef YAW_LOOK_AHEAD_RATE
- # define YAW_LOOK_AHEAD_RATE		1000			// dimensionless, smaller number means stronger effect
+#ifndef YAW_LOOK_AHEAD_MIN_SPEED
+ # define YAW_LOOK_AHEAD_MIN_SPEED  1000             // minimum ground speed in cm/s required before copter is aimed at ground course
 #endif
 
 
@@ -832,7 +836,11 @@
 #endif
 
 #ifndef AUTO_SLEW_RATE
- # define AUTO_SLEW_RATE         	30                     // degrees
+ # define AUTO_SLEW_RATE         	30                     // degrees/sec
+#endif
+
+#ifndef AUTO_YAW_SLEW_RATE
+ # define AUTO_YAW_SLEW_RATE        60                     // degrees/sec
 #endif
 
 
@@ -845,11 +853,7 @@
 #endif
 
 #ifndef TILT_COMPENSATION
- # if FRAME_CONFIG == HELI_FRAME
-  #   define TILT_COMPENSATION 5
- # else
   #   define TILT_COMPENSATION 54
- # endif
 #endif
 
 
@@ -1003,7 +1007,10 @@
  # define LOG_ITERM                     ENABLED
 #endif
 #ifndef LOG_INAV
- # define LOG_INAV                              DISABLED
+ # define LOG_INAV                      DISABLED
+#endif
+#ifndef LOG_CAMERA
+ # define LOG_CAMERA                    DISABLED
 #endif
 
 // calculate the default log_bitmask
@@ -1119,10 +1126,6 @@
 // experimental mpu6000 DMP code
 #ifndef SECONDARY_DMP_ENABLED
  # define SECONDARY_DMP_ENABLED DISABLED
-#endif
-
-#ifndef ALTERNATIVE_YAW_MODE
- # define ALTERNATIVE_YAW_MODE DISABLED
 #endif
 
 // Inertia based contollers.

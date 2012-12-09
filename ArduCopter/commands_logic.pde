@@ -16,7 +16,7 @@ static void process_nav_command()
         break;
 
     case MAV_CMD_NAV_LAND:              // 21 LAND to Waypoint
-        yaw_mode                = YAW_HOLD;
+        set_yaw_mode(YAW_HOLD);
         do_land();
         break;
 
@@ -112,6 +112,7 @@ static void process_now_command()
         break;
 
     case MAV_CMD_DO_DIGICAM_CONTROL:                    // Mission command to control an on-board camera controller system. |Session control e.g. show/hide lens| Zoom's absolute position| Zooming step value to offset zoom from the current position| Focus Locking, Unlocking or Re-locking| Shooting Command| Command Identity| Empty|
+        do_take_picture();
         break;
 #endif
 
@@ -216,9 +217,8 @@ static void do_RTL(void)
     rtl_state = RTL_STATE_RETURNING_HOME;
 
     // set roll, pitch and yaw modes
-    roll_pitch_mode     = RTL_RP;
-    yaw_mode            = YAW_AUTO;
-    auto_yaw_tracking   = MAV_ROI_WPNEXT;
+    set_roll_pitch_mode(RTL_RP);
+    set_yaw_mode(YAW_LOOK_AT_HOME);
     set_throttle_mode(RTL_THR);
 
     // set navigation mode
@@ -320,9 +320,9 @@ static void do_loiter_turns()
 
     loiter_total = command_nav_queue.p1 * 360;
     loiter_sum       = 0;
-    old_target_bearing = target_bearing;
+    old_wp_bearing = wp_bearing;
 
-    circle_angle = target_bearing + 18000;
+    circle_angle = wp_bearing + 18000;
     circle_angle = wrap_360(circle_angle);
     circle_angle *= RADX100;
 }
@@ -471,7 +471,7 @@ static bool verify_RTL()
                 rtl_loiter_start_time = millis();
 
                 // give pilot back control of yaw
-                yaw_mode = YAW_HOLD;
+                set_yaw_mode(YAW_HOLD);
             }
             break;
 
@@ -555,57 +555,29 @@ static void do_within_distance()
 
 static void do_yaw()
 {
-    //cliSerial->println("dyaw ");
-    auto_yaw_tracking = MAV_ROI_NONE;
-
-    // target angle in degrees
-    command_yaw_start               = nav_yaw;     // current position
-    command_yaw_start_time  = millis();
-
-    command_yaw_dir                 = command_cond_queue.p1;                            // 1 = clockwise,	 0 = counterclockwise
-    command_yaw_speed               = command_cond_queue.lat * 100;             // ms * 100
-    command_yaw_relative    = command_cond_queue.lng;                           // 1 = Relative,	 0 = Absolute
-
-    // if unspecified turn at 30° per second
-    if(command_yaw_speed == 0)
-        command_yaw_speed = 3000;
-
-    // ensure direction is valid, if invalid default to counter clockwise
-    if(command_yaw_dir > 1)
-        command_yaw_dir = 0;            // 0 = counter clockwise, 1 = clockwise
-
-    if(command_yaw_relative == 1) {
-        // relative
-        command_yaw_delta       = command_cond_queue.alt * 100;
-        if(command_yaw_dir == 0) {              // 0 = counter clockwise, 1 = clockwise
-            command_yaw_end = command_yaw_start - command_yaw_delta;
-        }else{
-            command_yaw_end = command_yaw_start + command_yaw_delta;
-        }
-        command_yaw_end = wrap_360(command_yaw_end);
+    // get final angle, 1 = Relative, 0 = Absolute
+    if( command_cond_queue.lng == 0 ) {
+        // absolute angle
+        yaw_look_at_heading = wrap_360(command_cond_queue.alt * 100);
     }else{
-        // absolute
-        command_yaw_end         = command_cond_queue.alt * 100;
-
-        // calculate the delta travel in deg * 100
-        if(command_yaw_dir == 0) {              // 0 = counter clockwise, 1 = clockwise
-            if(command_yaw_start > command_yaw_end) {
-                command_yaw_delta = command_yaw_start - command_yaw_end;
-            }else{
-                command_yaw_delta = 36000 + (command_yaw_start - command_yaw_end);
-            }
-        }else{
-            if(command_yaw_start >= command_yaw_end) {
-                command_yaw_delta = 36000 - (command_yaw_start - command_yaw_end);
-            }else{
-                command_yaw_delta = command_yaw_end - command_yaw_start;
-            }
-        }
-        command_yaw_delta = wrap_360(command_yaw_delta);
+        // relative angle
+        yaw_look_at_heading = wrap_360(nav_yaw + command_cond_queue.alt * 100);
     }
 
-    // rate to turn deg per second - default is ten
-    command_yaw_time        = (command_yaw_delta / command_yaw_speed) * 1000;
+    // get turn speed
+    if( command_cond_queue.lat == 0 ) {
+        // default to regular auto slew rate
+        yaw_look_at_heading_slew = AUTO_YAW_SLEW_RATE;
+    }else{
+        int32_t turn_rate = (wrap_180(yaw_look_at_heading - nav_yaw) / 100) / command_cond_queue.lat;
+        yaw_look_at_heading_slew = constrain(turn_rate, 1, 360);    // deg / sec
+    }
+
+    // set yaw mode
+    set_yaw_mode(YAW_LOOK_AT_HEADING);
+
+    // TO-DO: restore support for clockwise / counter clockwise rotation held in command_cond_queue.p1
+    // command_cond_queue.p1; // 0 = undefined, 1 = clockwise, -1 = counterclockwise
 }
 
 
@@ -652,35 +624,12 @@ static bool verify_within_distance()
     return false;
 }
 
+// verify_yaw - return true if we have reached the desired heading
 static bool verify_yaw()
 {
-    //cliSerial->printf("vyaw %d\n", (int)(nav_yaw/100));
-
-    if((millis() - command_yaw_start_time) > command_yaw_time) {
-        // time out
-        // make sure we hold at the final desired yaw angle
-        nav_yaw         = command_yaw_end;
-        auto_yaw        = nav_yaw;
-
-        // TO-DO: there's still a problem with Condition_yaw, it will do it two times(probably more) sometimes, if it hasn't reached the next waypoint yet.
-        // it should only do it one time so there should be code here to prevent another Condition_Yaw.
-
-        //cliSerial->println("Y");
+    if( labs(wrap_180(ahrs.yaw_sensor-yaw_look_at_heading)) <= 200 ) {
         return true;
-
     }else{
-        // else we need to be at a certain place
-        // power is a ratio of the time : .5 = half done
-        float power = (float)(millis() - command_yaw_start_time) / (float)command_yaw_time;
-
-        if(command_yaw_dir == 0) {              // 0 = counter clockwise, 1 = clockwise
-            nav_yaw         = command_yaw_start - ((float)command_yaw_delta * power );
-        }else{
-            nav_yaw         = command_yaw_start + ((float)command_yaw_delta * power );
-        }
-        nav_yaw         = wrap_360(nav_yaw);
-        auto_yaw        = nav_yaw;
-        //cliSerial->printf("ny %ld\n",nav_yaw);
         return false;
     }
 }
@@ -696,8 +645,7 @@ static bool verify_nav_roi()
     // check if mount type requires us to rotate the quad
     if( camera_mount.get_mount_type() != AP_Mount::k_pan_tilt && camera_mount.get_mount_type() != AP_Mount::k_pan_tilt_roll ) {
         // ensure yaw has gotten to within 2 degrees of the target
-        if( labs(wrap_180(ahrs.yaw_sensor-auto_yaw)) <= 200 ) {
-            nav_yaw = auto_yaw;                 // ensure target yaw for YAW_HOLD is our desired yaw
+        if( labs(wrap_180(ahrs.yaw_sensor-yaw_look_at_WP_bearing)) <= 200 ) {
             return true;
         }else{
             return false;
@@ -709,8 +657,7 @@ static bool verify_nav_roi()
 #else
     // if we have no camera mount simply check we've reached the desired yaw
     // ensure yaw has gotten to within 2 degrees of the target
-    if( abs(wrap_180(ahrs.yaw_sensor-auto_yaw)) <= 200 ) {
-        nav_yaw = auto_yaw;             // ensure target yaw for YAW_HOLD is our desired yaw
+    if( labs(wrap_180(ahrs.yaw_sensor-yaw_look_at_WP_bearing)) <= 200 ) {
         return true;
     }else{
         return false;
@@ -727,12 +674,20 @@ static void do_change_speed()
     g.waypoint_speed_max = command_cond_queue.p1 * 100;
 }
 
+// do_target_yaw - initialise yaw mode based on requested yaw target
 static void do_target_yaw()
 {
-    auto_yaw_tracking = command_cond_queue.p1;
-
-    if(auto_yaw_tracking == MAV_ROI_LOCATION) {
-        target_WP = command_cond_queue;
+    switch( command_cond_queue.p1 ) {
+        case MAV_ROI_NONE:
+            set_yaw_mode(YAW_HOLD);
+            break;
+        case MAV_ROI_WPNEXT:
+            set_yaw_mode(YAW_LOOK_AT_NEXT_WP);
+            break;
+        case MAV_ROI_LOCATION:
+            yaw_look_at_WP = command_cond_queue;
+            set_yaw_mode(YAW_LOOK_AT_LOCATION);
+            break;
     }
 }
 
@@ -790,7 +745,49 @@ static void do_set_home()
 
 static void do_set_servo()
 {
-    APM_RC.OutputCh(command_cond_queue.p1 - 1, command_cond_queue.alt);
+    uint8_t channel_num = 0xff;
+
+    switch( command_cond_queue.p1 ) {
+        case 1:
+            channel_num = CH_1;
+            break;
+        case 2:
+            channel_num = CH_2;
+            break;
+        case 3:
+            channel_num = CH_3;
+            break;
+        case 4:
+            channel_num = CH_4;
+            break;
+        case 5:
+            channel_num = CH_5;
+            break;
+        case 6:
+            channel_num = CH_6;
+            break;
+        case 7:
+            channel_num = CH_7;
+            break;
+        case 8:
+            channel_num = CH_8;
+            break;
+        case 9:
+            // not used
+            break;
+        case 10:
+            channel_num = CH_10;
+            break;
+        case 11:
+            channel_num = CH_11;
+            break;
+    }
+
+    // send output to channel
+    if (channel_num != 0xff) {
+        APM_RC.enable_out(channel_num);
+        APM_RC.OutputCh(channel_num, command_cond_queue.alt);
+    }
 }
 
 static void do_set_relay()
@@ -853,9 +850,8 @@ static void do_nav_roi()
 
     // check if mount type requires us to rotate the quad
     if( camera_mount.get_mount_type() != AP_Mount::k_pan_tilt && camera_mount.get_mount_type() != AP_Mount::k_pan_tilt_roll ) {
-        auto_yaw_tracking = MAV_ROI_LOCATION;
-        target_WP = command_nav_queue;
-        auto_yaw = get_bearing_cd(&current_loc, &target_WP);
+        yaw_look_at_WP = command_nav_queue;
+        set_yaw_mode(YAW_LOOK_AT_LOCATION);
     }
     // send the command to the camera mount
     camera_mount.set_roi_cmd(&command_nav_queue);
@@ -867,9 +863,19 @@ static void do_nav_roi()
     //		3: point at a location given by alt, lon, lat parameters
     //		4: point at a target given a target id (can't be implmented)
 #else
-    // if we have no camera mount simply rotate the quad
-    auto_yaw_tracking = MAV_ROI_LOCATION;
-    target_WP = command_nav_queue;
-    auto_yaw = get_bearing_cd(&current_loc, &target_WP);
+    // if we have no camera mount aim the quad at the location
+    yaw_look_at_WP = command_nav_queue;
+    set_yaw_mode(YAW_LOOK_AT_LOCATION);
+#endif
+}
+
+// do_take_picture - take a picture with the camera library
+static void do_take_picture()
+{
+#if CAMERA == ENABLED
+    g.camera.trigger_pic();
+    if (g.log_bitmask & MASK_LOG_CAMERA) {
+        Log_Write_Camera();
+    }
 #endif
 }

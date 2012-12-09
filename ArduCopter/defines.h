@@ -13,12 +13,14 @@
 
 // Flight modes
 // ------------
-#define YAW_HOLD                        0
-#define YAW_ACRO                        1
-#define YAW_AUTO                        2
-#define YAW_LOOK_AT_HOME    		    3
-#define YAW_TOY                         4       // THOR This is the Yaw mode
-#define YAW_LOOK_AHEAD					5		// WARNING!  CODE IN DEVELOPMENT NOT PROVEN
+#define YAW_HOLD                        0       // heading hold at heading in nav_yaw but allow input from pilot
+#define YAW_ACRO                        1       // pilot controlled yaw using rate controller
+#define YAW_LOOK_AT_NEXT_WP             2       // point towards next waypoint (no pilot input accepted)
+#define YAW_LOOK_AT_LOCATION            3       // point towards a location held in yaw_look_at_WP (no pilot input accepted)
+#define YAW_LOOK_AT_HOME    		    4       // point towards home (no pilot input accepted)
+#define YAW_LOOK_AT_HEADING    		    5       // point towards a particular angle (not pilot input accepted)
+#define YAW_LOOK_AHEAD					6		// WARNING!  CODE IN DEVELOPMENT NOT PROVEN
+#define YAW_TOY                         7       // THOR This is the Yaw mode
 
 
 #define ROLL_PITCH_STABLE       0
@@ -48,15 +50,17 @@
 #define SONAR_SOURCE_ANALOG_PIN 2
 
 // CH 7 control
+#define CH7_PWM_TRIGGER 1800    // pwm value above which the channel 7 option will be invoked
 #define CH7_DO_NOTHING 0
-#define CH7_SET_HOVER 1
+#define CH7_SET_HOVER 1         // deprecated
 #define CH7_FLIP 2
 #define CH7_SIMPLE_MODE 3
 #define CH7_RTL 4
-#define CH7_AUTO_TRIM 5
-#define CH7_ADC_FILTER 6
+#define CH7_SAVE_TRIM 5
+#define CH7_ADC_FILTER 6        // deprecated
 #define CH7_SAVE_WP 7
-#define CH7_MULTI_MODE 8
+#define CH7_MULTI_MODE 8        // deprecated
+#define CH7_CAMERA_TRIGGER 9
 
 
 // Frame types
@@ -76,11 +80,6 @@
 #define NORMAL_LEDS 0
 #define SAVE_TRIM_LEDS 1
 
-
-#define CH_7_PWM_TRIGGER 1800
-#define CH_6_PWM_TRIGGER_HIGH 1800
-#define CH_6_PWM_TRIGGER 1500
-#define CH_6_PWM_TRIGGER_LOW 1200
 
 // Internal defines, don't edit and expect things to work
 // -------------------------------------------------------
@@ -249,13 +248,7 @@
 #define RTL_STATE_LAND              3
 
 //repeating events
-#define NO_REPEAT 0
-#define CH_5_TOGGLE 1
-#define CH_6_TOGGLE 2
-#define CH_7_TOGGLE 3
-#define CH_8_TOGGLE 4
 #define RELAY_TOGGLE 5
-#define STOP_REPEAT 10
 
 //  GCS Message ID's
 /// NOTE: to ensure we never block on sending MAVLink messages
@@ -316,6 +309,7 @@ enum gcs_severity {
 #define LOG_ITERM_MSG                   0x0F
 #define LOG_DMP_MSG                     0x10
 #define LOG_INAV_MSG                    0x11
+#define LOG_CAMERA_MSG                  0x12
 #define LOG_INDEX_MSG                   0xF0
 #define MAX_NUM_LOGS                    50
 
@@ -334,19 +328,7 @@ enum gcs_severity {
 #define MASK_LOG_PID                    (1<<12)
 #define MASK_LOG_ITERM                  (1<<13)
 #define MASK_LOG_INAV                   (1<<14)
-
-
-#define MASK_LOG_CTUN                   (1<<4)
-#define MASK_LOG_NTUN                   (1<<5)
-#define MASK_LOG_MODE                   (1<<6)
-#define MASK_LOG_RAW                    (1<<7)
-#define MASK_LOG_CMD                    (1<<8)
-#define MASK_LOG_CUR                    (1<<9)
-#define MASK_LOG_MOTORS                 (1<<10)
-#define MASK_LOG_OPTFLOW                (1<<11)
-#define MASK_LOG_PID                    (1<<12)
-#define MASK_LOG_ITERM                  (1<<13)
-
+#define MASK_LOG_CAMERA                 (1<<15)
 
 // DATA - event logging
 #define DATA_MAVLINK_FLOAT              1
@@ -493,13 +475,5 @@ enum gcs_severity {
 
 #define AP_BARO_BMP085    1
 #define AP_BARO_MS5611    2
-
-#define LOGGING_SIMPLE    1
-#define LOGGING_VERBOSE   2
-
-// Channel Config selection
-
-#define CHANNEL_CONFIG_DEFAULT 1
-#define CHANNEL_CONFIG_CUSTOM  2
 
 #endif // _DEFINES_H
