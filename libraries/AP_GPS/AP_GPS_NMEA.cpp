@@ -25,12 +25,12 @@
 /// TinyGPS parser by Mikal Hart.
 ///
 
-#include <FastSerial.h>
 #include <AP_Common.h>
 
-#include <avr/pgmspace.h>
+#include <AP_Progmem.h>
 #include <ctype.h>
 #include <stdint.h>
+#include <stdlib.h>
 
 #include "AP_GPS_NMEA.h"
 
@@ -90,25 +90,19 @@ const char AP_GPS_NMEA::_gpvtg_string[] PROGMEM = "GPVTG";
 //
 #define DIGIT_TO_VAL(_x)        (_x - '0')
 
-// Constructors ////////////////////////////////////////////////////////////////
-AP_GPS_NMEA::AP_GPS_NMEA(Stream *s) :
-    GPS(s)
-{
-}
-
 // Public Methods //////////////////////////////////////////////////////////////
-void AP_GPS_NMEA::init(enum GPS_Engine_Setting nav_setting)
+void AP_GPS_NMEA::init(AP_HAL::UARTDriver *s, enum GPS_Engine_Setting nav_setting)
 {
-    BetterStream        *bs = (BetterStream *)_port;
+	_port = s;
 
     // send the SiRF init strings
-    bs->print_P((const prog_char_t *)_SiRF_init_string);
+    _port->print_P((const prog_char_t *)_SiRF_init_string);
 
     // send the MediaTek init strings
-    bs->print_P((const prog_char_t *)_MTK_init_string);
+    _port->print_P((const prog_char_t *)_MTK_init_string);
 
     // send the ublox init strings
-    bs->print_P((const prog_char_t *)_ublox_init_string);
+    _port->print_P((const prog_char_t *)_ublox_init_string);
 
     idleTimeout = 1200;
 }

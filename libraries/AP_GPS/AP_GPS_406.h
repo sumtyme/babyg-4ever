@@ -9,8 +9,10 @@
 //	version 2.1 of the License, or (at your option) any later version.
 //
 
-#ifndef AP_GPS_406_h
-#define AP_GPS_406_h
+#ifndef __AP_GPS_406_H__
+#define __AP_GPS_406_H__
+
+#include <AP_HAL.h>
 
 #include "AP_GPS_SIRF.h"
 
@@ -20,13 +22,12 @@ class AP_GPS_406 : public AP_GPS_SIRF
 {
 public:
     // Methods
-    AP_GPS_406(Stream *port);
-    virtual void        init(enum GPS_Engine_Setting nav_setting = GPS_ENGINE_NONE);
+    virtual void        init(AP_HAL::UARTDriver *s, enum GPS_Engine_Setting nav_setting = GPS_ENGINE_NONE);
 
 private:
     void                _change_to_sirf_protocol(void);
     void                _configure_gps(void);
 };
 
-#endif
+#endif // __AP_HAL_GPS_406_H__
 

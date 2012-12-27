@@ -2,12 +2,13 @@
 
 
 /// @file	limits.cpp
-/// @brief	Imposes limits on location (geofence), altitude and other parameters.
-///         Each limit breach will trigger an action or set of actions to recover. Adapted from geofence.
+/// @brief	Imposes limits on location (geofence), altitude and other parameters
+/// Each limit breach will trigger an action or set of actions to recover.
+//  Adapted from geofence.
 /// @author Andrew Tridgell
 ///         Andreas Antonopoulos
 
-#include <AP_Limit_Altitude.h>
+#include "AP_Limit_Altitude.h"
 
 const AP_Param::GroupInfo AP_Limit_Altitude::var_info[] PROGMEM = {
     // @Param: ALT_ON
@@ -47,6 +48,7 @@ const AP_Param::GroupInfo AP_Limit_Altitude::var_info[] PROGMEM = {
 AP_Limit_Altitude::AP_Limit_Altitude(struct Location *current_loc) :
     AP_Limit_Module(AP_LIMITS_ALTITUDE)     // enabled and required
 {
+    AP_Param::setup_object_defaults(this, var_info);
     _current_loc = current_loc;
 }
 

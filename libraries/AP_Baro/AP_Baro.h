@@ -6,15 +6,17 @@
 #include <AP_Param.h>
 #include <Filter.h>
 #include <DerivativeFilter.h>
-#include "../AP_PeriodicProcess/AP_PeriodicProcess.h"
 
 class AP_Baro
 {
 public:
     bool                    healthy;
+
     AP_Baro() {
+		AP_Param::setup_object_defaults(this, var_info);
     }
-    virtual bool            init(AP_PeriodicProcess *scheduler)=0;
+
+    virtual bool            init()=0;
     virtual uint8_t         read() = 0;
     virtual float           get_pressure() = 0;
     virtual float           get_temperature() = 0;
@@ -25,7 +27,7 @@ public:
     // calibrate the barometer. This must be called on startup if the
     // altitude/climb_rate/acceleration interfaces are ever used
     // the callback is a delay() like routine
-    void        calibrate(void (*callback)(unsigned long t));
+    void        calibrate();
 
     // get current altitude in meters relative to altitude at the time
     // of the last calibrate() call

@@ -35,21 +35,17 @@
  *
  */
 
-extern "C" {
 // AVR LibC Includes
 #include <inttypes.h>
-#include <avr/interrupt.h>
-}
-#if defined(ARDUINO) && ARDUINO >= 100
- #include "Arduino.h"
-#else
- #include "WConstants.h"
-#endif
 
 #include <AP_Common.h>
 #include <AP_Math.h>            // ArduPilot Mega Vector/Matrix math Library
-#include <I2C.h>
+
+#include <AP_HAL.h>
+
 #include "AP_Baro_BMP085.h"
+
+extern const AP_HAL::HAL& hal;
 
 #define BMP085_ADDRESS 0x77  //(0xEE >> 1)
 #define BMP085_EOC 30        // End of conversion pin PC7
@@ -58,22 +54,26 @@ extern "C" {
 // chip using a direct IO port
 // On APM2 prerelease hw, the data ready port is hooked up to PE7, which
 // is not available to the arduino digitalRead function.
-#define BMP_DATA_READY() (_apm2_hardware ? (PINE&0x80) : digitalRead(BMP085_EOC))
+#if CONFIG_HAL_BOARD == HAL_BOARD_APM2
+#define BMP_DATA_READY() (PINE&0x80)
+#else
+#define BMP_DATA_READY() hal.gpio->read(BMP085_EOC)
+#endif
 
 // oversampling 3 gives highest resolution
 #define OVERSAMPLING 3
 
 // Public Methods //////////////////////////////////////////////////////////////
-bool AP_Baro_BMP085::init( AP_PeriodicProcess * scheduler )
+bool AP_Baro_BMP085::init()
 {
-    byte buff[22];
+    uint8_t buff[22];
 
-    pinMode(BMP085_EOC, INPUT);          // End Of Conversion (PC7) input
+    hal.gpio->pinMode(BMP085_EOC, GPIO_INPUT);// End Of Conversion (PC7) input
 
     BMP085_State = 0;                    // Initial state
 
     // We read the calibration data registers
-    if (I2c.read(BMP085_ADDRESS, 0xAA, 22, buff) != 0) {
+    if (hal.i2c->readRegisters(BMP085_ADDRESS, 0xAA, 22, buff) != 0) {
         healthy = false;
         return false;
     }
@@ -92,6 +92,7 @@ bool AP_Baro_BMP085::init( AP_PeriodicProcess * scheduler )
 
     //Send a command to read Temp
     Command_ReadTemp();
+    
     BMP085_State = 1;
 
     // init raw temo
@@ -123,7 +124,7 @@ uint8_t AP_Baro_BMP085::read()
         }
     }
     if (result) {
-        _last_update = millis();
+        _last_update = hal.scheduler->millis();
     }
     return(result);
 }
@@ -149,7 +150,9 @@ int32_t AP_Baro_BMP085::get_raw_temp() {
 // Send command to Read Pressure
 void AP_Baro_BMP085::Command_ReadPress()
 {
-    if (I2c.write(BMP085_ADDRESS, 0xF4, 0x34+(OVERSAMPLING << 6)) != 0) {
+    uint8_t res = hal.i2c->writeRegister(BMP085_ADDRESS, 0xF4,
+            0x34+(OVERSAMPLING << 6));
+    if (res != 0) {
         healthy = false;
     }
 }
@@ -159,24 +162,26 @@ void AP_Baro_BMP085::ReadPress()
 {
     uint8_t buf[3];
 
-    if (!healthy && millis() < _retry_time) {
+    if (!healthy && hal.scheduler->millis() < _retry_time) {
         return;
     }
 
-    if (I2c.read(BMP085_ADDRESS, 0xF6, 3, buf) != 0) {
-        _retry_time = millis() + 1000;
-        I2c.setSpeed(false);
+    if (hal.i2c->readRegisters(BMP085_ADDRESS, 0xF6, 3, buf) != 0) {
+        _retry_time = hal.scheduler->millis() + 1000;
+        hal.i2c->setHighSpeed(false);
         healthy = false;
         return;
     }
 
-    RawPress = (((uint32_t)buf[0] << 16) | ((uint32_t)buf[1] << 8) | ((uint32_t)buf[2])) >> (8 - OVERSAMPLING);
+    RawPress = (((uint32_t)buf[0] << 16) 
+             | ((uint32_t)buf[1] << 8)
+             | ((uint32_t)buf[2])) >> (8 - OVERSAMPLING);
 }
 
 // Send Command to Read Temperature
 void AP_Baro_BMP085::Command_ReadTemp()
 {
-    if (I2c.write(BMP085_ADDRESS, 0xF4, 0x2E) != 0) {
+    if (hal.i2c->writeRegister(BMP085_ADDRESS, 0xF4, 0x2E) != 0) {
         healthy = false;
     }
 }
@@ -187,13 +192,13 @@ void AP_Baro_BMP085::ReadTemp()
     uint8_t buf[2];
     int32_t _temp_sensor;
 
-    if (!healthy && millis() < _retry_time) {
+    if (!healthy && hal.scheduler->millis() < _retry_time) {
         return;
     }
 
-    if (I2c.read(BMP085_ADDRESS, 0xF6, 2, buf) != 0) {
-        _retry_time = millis() + 1000;
-        I2c.setSpeed(false);
+    if (hal.i2c->readRegisters(BMP085_ADDRESS, 0xF6, 2, buf) != 0) {
+        _retry_time = hal.scheduler->millis() + 1000;
+        hal.i2c->setHighSpeed(false);
         healthy = false;
         return;
     }

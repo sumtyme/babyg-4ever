@@ -32,7 +32,7 @@ public:
     //
     // The enumeration defined here is used to ensure that every parameter
     // or parameter group has a unique ID number.	This number is used by
-    // AP_Var to store and locate parameters in EEPROM.
+    // AP_Param to store and locate parameters in EEPROM.
     //
     // Note that entries without a number are assigned the next number after
     // the entry preceding them.	When adding new entries, ensure that they
@@ -43,7 +43,7 @@ public:
     // at the end of the enumeration.
     //
     // WARNING: Care should be taken when editing this enumeration as the
-    //			AP_Var load/save code depends on the values here to identify
+    //			AP_Param load/save code depends on the values here to identify
     //			variables saved in EEPROM.
     //
     //
@@ -57,6 +57,9 @@ public:
 
         // simulation
         k_param_sitl = 10,
+
+        // barometer object (needed for SITL)
+        k_param_barometer,
 
         // Misc
         //
@@ -72,6 +75,8 @@ public:
         k_param_crosstrack_min_distance,
         k_param_rssi_pin,
         k_param_throttle_accel_enabled,
+        k_param_yaw_override_behaviour,
+        k_param_acro_trainer_enabled,   // 27
 
         // 65: AP_Limits Library
         k_param_limits = 65,
@@ -170,16 +175,16 @@ public:
         k_param_rc_11,
         k_param_throttle_min,
         k_param_throttle_max,
-        k_param_throttle_fs_enabled,
-        k_param_throttle_fs_action,
-        k_param_throttle_fs_value,
+        k_param_failsafe_throttle,
+        k_param_throttle_fs_action,     // remove
+        k_param_failsafe_throttle_value,
         k_param_throttle_cruise,
         k_param_esc_calibrate,
         k_param_radio_tuning,
         k_param_radio_tuning_high,
         k_param_radio_tuning_low,
         k_param_rc_speed = 192,
-        k_param_battery_fs_enabled, // 193
+        k_param_failsafe_battery_enabled, // 193
 
         //
         // 200: flight modes
@@ -198,19 +203,17 @@ public:
         k_param_waypoint_mode = 210, // remove
         k_param_command_total,
         k_param_command_index,
-        k_param_command_nav_index,
+        k_param_command_nav_index,   // remove
         k_param_waypoint_radius,
-        k_param_loiter_radius,
+        k_param_circle_radius,
         k_param_waypoint_speed_max,
         k_param_land_speed, // 217
 
         //
         // 220: PI/D Controllers
         //
-        //k_param_stabilize_d_schedule = 219,
-        //k_param_stabilize_d = 220,
         k_param_acro_p = 221,
-        k_param_axis_lock_p,
+        k_param_axis_lock_p,    // remove
         k_param_pid_rate_roll,
         k_param_pid_rate_pitch,
         k_param_pid_rate_yaw,
@@ -227,8 +230,8 @@ public:
         k_param_pid_throttle,
         k_param_pid_optflow_roll,
         k_param_pid_optflow_pitch,
-        k_param_acro_balance_roll,
-        k_param_acro_balance_pitch,
+        k_param_acro_balance_roll,      // scalar (not PID)
+        k_param_acro_balance_pitch,     // scalar (not PID)
         k_param_pid_throttle_accel, // 241
 
         // 254,255: reserved
@@ -255,7 +258,7 @@ public:
     AP_Float        curr_amp_per_volt;
     AP_Float        input_voltage;
     AP_Int16        pack_capacity;              // Battery pack capacity less reserve
-    AP_Int8         battery_fs_enabled;         // battery failsafe enabled
+    AP_Int8         failsafe_battery_enabled;   // battery failsafe enabled
 
     AP_Int8         compass_enabled;
     AP_Int8         optflow_enabled;
@@ -271,15 +274,14 @@ public:
     AP_Int8         battery_curr_pin;
     AP_Int8         rssi_pin;
     AP_Int8         throttle_accel_enabled;      // enable/disable accel based throttle controller
+    AP_Int8         yaw_override_behaviour;     // controls when autopilot takes back normal control of yaw after pilot overrides
 
     // Waypoints
     //
-    AP_Int8         waypoint_mode;
     AP_Int8         command_total;
     AP_Int8         command_index;
-    AP_Int8         command_nav_index;
     AP_Int16        waypoint_radius;
-    AP_Int16        loiter_radius;
+    AP_Int16        circle_radius;
     AP_Int16        waypoint_speed_max;
     AP_Float        crosstrack_gain;
     AP_Int16 		crosstrack_min_distance;
@@ -291,9 +293,8 @@ public:
     //
     AP_Int16        throttle_min;
     AP_Int16        throttle_max;
-    AP_Int8         throttle_fs_enabled;
-    AP_Int8         throttle_fs_action;
-    AP_Int16        throttle_fs_value;
+    AP_Int8         failsafe_throttle;
+    AP_Int16        failsafe_throttle_value;
     AP_Int16        throttle_cruise;
 
     // Flight modes
@@ -309,9 +310,7 @@ public:
     // Misc
     //
     AP_Int16        log_bitmask;
-    AP_Int16        log_last_filenumber;        // *** Deprecated - remove
-                                                // with next eeprom number
-                                                // change
+
     AP_Int8         toy_yaw_rate;                               // THOR The
                                                                 // Yaw Rate 1
                                                                 // = fast, 2 =
@@ -354,14 +353,11 @@ public:
 #endif
     AP_Int16                rc_speed; // speed of fast RC Channels in Hz
 
-    //AP_Float                stabilize_d;
-    //AP_Float                stabilize_d_schedule;
-
     // Acro parameters
     AP_Float                acro_p;
-    AP_Float                axis_lock_p;
     AP_Int16                acro_balance_roll;
     AP_Int16                acro_balance_pitch;
+    AP_Int8                 acro_trainer_enabled;
 
     // PI/D controllers
     AC_PID                  pid_rate_roll;

@@ -2,7 +2,7 @@
 
 #if LOGGING_ENABLED == ENABLED
 
-// Code to Write and Read packets from DataFlash log memory
+// Code to Write and Read packets from DataFlash.log memory
 // Code to interact with the user to dump or erase logs
 
  #define HEAD_BYTE1      0xA3   // Decimal 163
@@ -55,16 +55,16 @@ print_log_menu(void)
 
     uint16_t num_logs = DataFlash.get_num_logs();
 
-    cliSerial->printf_P(PSTR("logs enabled: "));
+    cliSerial->println_P(PSTR("logs enabled: "));
 
     if (0 == g.log_bitmask) {
-        cliSerial->printf_P(PSTR("none"));
+        cliSerial->println_P(PSTR("none"));
     }else{
         // Macro to make the following code a bit easier on the eye.
         // Pass it the capitalised name of the log option, as defined
         // in defines.h but without the LOG_ prefix.  It will check for
         // the bit being set and print the name of the log option to suit.
- #define PLOG(_s)        if (g.log_bitmask & MASK_LOG_ ## _s) cliSerial->printf_P(PSTR(" %S"), PSTR(# _s))
+ #define PLOG(_s) if (g.log_bitmask & MASK_LOG_ ## _s) cliSerial->printf_P(PSTR(" %S"), PSTR(# _s))
         PLOG(ATTITUDE_FAST);
         PLOG(ATTITUDE_MED);
         PLOG(GPS);
@@ -124,7 +124,10 @@ dump_log(uint8_t argc, const Menu::arg *argv)
         cliSerial->printf_P(PSTR("dumping all\n"));
         Log_Read(1, DataFlash.df_NumPages);
         return(-1);
-    } else if ((argc != 2) || (dump_log <= (last_log_num - DataFlash.get_num_logs())) || (dump_log > last_log_num)) {
+    } else if ((argc != 2)
+        || (dump_log <= (last_log_num - DataFlash.get_num_logs()))
+        || (dump_log > last_log_num))
+    {
         cliSerial->printf_P(PSTR("bad log number\n"));
         return(-1);
     }
@@ -143,7 +146,7 @@ dump_log(uint8_t argc, const Menu::arg *argv)
 static void do_erase_logs(void)
 {
     gcs_send_text_P(SEVERITY_LOW, PSTR("Erasing logs"));
-    DataFlash.EraseAll(mavlink_delay);
+    DataFlash.EraseAll();
     gcs_send_text_P(SEVERITY_LOW, PSTR("Log erase complete"));
 }
 
@@ -245,7 +248,7 @@ static void Log_Write_Performance()
 
 // Write a command processing packet. Total length : 19 bytes
 //void Log_Write_Cmd(byte num, byte id, byte p1, int32_t alt, int32_t lat, int32_t lng)
-static void Log_Write_Cmd(byte num, struct Location *wp)
+static void Log_Write_Cmd(uint8_t num, struct Location *wp)
 {
     DataFlash.WriteByte(HEAD_BYTE1);
     DataFlash.WriteByte(HEAD_BYTE2);
@@ -259,7 +262,7 @@ static void Log_Write_Cmd(byte num, struct Location *wp)
     DataFlash.WriteByte(END_BYTE);
 }
 
-static void Log_Write_Startup(byte type)
+static void Log_Write_Startup(uint8_t type)
 {
     DataFlash.WriteByte(HEAD_BYTE1);
     DataFlash.WriteByte(HEAD_BYTE2);
@@ -316,7 +319,7 @@ static void Log_Write_Nav_Tuning()
 }
 
 // Write a mode packet. Total length : 5 bytes
-static void Log_Write_Mode(byte mode)
+static void Log_Write_Mode(uint8_t mode)
 {
     DataFlash.WriteByte(HEAD_BYTE1);
     DataFlash.WriteByte(HEAD_BYTE2);
@@ -326,8 +329,11 @@ static void Log_Write_Mode(byte mode)
 }
 
 // Write an GPS packet. Total length : 30 bytes
-static void Log_Write_GPS(      int32_t log_Time, int32_t log_Lattitude, int32_t log_Longitude, int32_t log_gps_alt, int32_t log_mix_alt,
-                                int32_t log_Ground_Speed, int32_t log_Ground_Course, byte log_Fix, byte log_NumSats)
+static void Log_Write_GPS(
+        int32_t log_Time, int32_t log_Lattitude, int32_t log_Longitude,
+        int32_t log_gps_alt, int32_t log_mix_alt,
+        int32_t log_Ground_Speed, int32_t log_Ground_Course, uint8_t log_Fix,
+        uint8_t log_NumSats)
 {
     DataFlash.WriteByte(HEAD_BYTE1);
     DataFlash.WriteByte(HEAD_BYTE2);
@@ -446,7 +452,7 @@ static void Log_Read_Performance()
 // Read a command processing packet
 static void Log_Read_Cmd()
 {
-    byte logvarb;
+    uint8_t logvarb;
     int32_t logvarl;
 
     cliSerial->printf_P(PSTR("CMD:"));
@@ -465,7 +471,7 @@ static void Log_Read_Cmd()
 
 static void Log_Read_Startup()
 {
-    byte logbyte = DataFlash.ReadByte();
+    uint8_t logbyte = DataFlash.ReadByte();
 
     if (logbyte == TYPE_AIRSTART_MSG)
         cliSerial->printf_P(PSTR("AIR START - "));
@@ -500,7 +506,7 @@ static void Log_Read_Mode()
 static void Log_Read_GPS()
 {
     int32_t l[7];
-    byte b[2];
+    uint8_t b[2];
     int16_t i;
     l[0] = DataFlash.ReadLong();
     b[0] = DataFlash.ReadByte();
@@ -532,7 +538,7 @@ static void Log_Read_Raw()
     cliSerial->println();
 }
 
-// Read the DataFlash log memory : Packet Parser
+// Read the DataFlash.log memory : Packet Parser
 static void Log_Read(int16_t start_page, int16_t end_page)
 {
     int16_t packet_count = 0;
@@ -555,105 +561,105 @@ static void Log_Read(int16_t start_page, int16_t end_page)
     cliSerial->printf_P(PSTR("Number of packets read: %d\n"), (int) packet_count);
 }
 
-// Read the DataFlash log memory : Packet Parser
+// Read the DataFlash.log memory : Packet Parser
 static int16_t Log_Read_Process(int16_t start_page, int16_t end_page)
 {
-    byte data;
-    byte log_step = 0;
+    uint8_t data;
+    uint8_t log_step = 0;
     int16_t page = start_page;
     int16_t packet_count = 0;
 
     DataFlash.StartRead(start_page);
-                        while (page < end_page && page != -1) {
-                            data = DataFlash.ReadByte();
+    while (page < end_page && page != -1) {
+        data = DataFlash.ReadByte();
 
-                            switch(log_step)     // This is a state machine to read the packets
-                            {
-                            case 0:
-                                if(data == HEAD_BYTE1)  // Head byte 1
-                                    log_step++;
-                                break;
-                            case 1:
-                                if(data == HEAD_BYTE2)  // Head byte 2
-                                    log_step++;
-                                else
-                                    log_step = 0;
-                                break;
-                            case 2:
-                                if(data == LOG_ATTITUDE_MSG) {
-                                    Log_Read_Attitude();
-                                    log_step++;
-
-                                }else if(data == LOG_MODE_MSG) {
-                                    Log_Read_Mode();
-                                    log_step++;
-
-                                }else if(data == LOG_CONTROL_TUNING_MSG) {
-                                    Log_Read_Control_Tuning();
-                                    log_step++;
-
-                                }else if(data == LOG_NAV_TUNING_MSG) {
-                                    Log_Read_Nav_Tuning();
-                                    log_step++;
-
-                                }else if(data == LOG_PERFORMANCE_MSG) {
-                                    Log_Read_Performance();
-                                    log_step++;
-
-                                }else if(data == LOG_RAW_MSG) {
-                                    Log_Read_Raw();
-                                    log_step++;
-
-                                }else if(data == LOG_CMD_MSG) {
-                                    Log_Read_Cmd();
-                                    log_step++;
-
-                                }else if(data == LOG_CURRENT_MSG) {
-                                    Log_Read_Current();
-                                    log_step++;
-
-                                }else if(data == LOG_STARTUP_MSG) {
-                                    Log_Read_Startup();
-                                    log_step++;
-                                }else {
-                                    if(data == LOG_GPS_MSG) {
-                                        Log_Read_GPS();
-                                        log_step++;
-                                    }else{
-                                        cliSerial->printf_P(PSTR("Error Reading Packet: %d\n"),packet_count);
-                                        log_step = 0;            // Restart, we have a problem...
-                                    }
-                                }
-                                break;
-                            case 3:
-                                if(data == END_BYTE) {
-                                    packet_count++;
-                                }else{
-                                    cliSerial->printf_P(PSTR("Error Reading END_BYTE: %d\n"),(int)data);
-                                }
-                                log_step = 0;                   // Restart sequence: new packet...
-                                break;
-                            }
-                            page = DataFlash.GetPage();
-                        }
-                        return packet_count;
+        switch(log_step)     // This is a state machine to read the packets
+        {
+        case 0:
+            if(data == HEAD_BYTE1)  // Head byte 1
+                log_step++;
+            break;
+        case 1:
+            if(data == HEAD_BYTE2)  // Head byte 2
+                log_step++;
+            else
+                log_step = 0;
+            break;
+        case 2:
+            if(data == LOG_ATTITUDE_MSG) {
+                Log_Read_Attitude();
+                log_step++;
+                
+            }else if(data == LOG_MODE_MSG) {
+                Log_Read_Mode();
+                log_step++;
+                
+            }else if(data == LOG_CONTROL_TUNING_MSG) {
+                Log_Read_Control_Tuning();
+                log_step++;
+                
+            }else if(data == LOG_NAV_TUNING_MSG) {
+                Log_Read_Nav_Tuning();
+                log_step++;
+                
+            }else if(data == LOG_PERFORMANCE_MSG) {
+                Log_Read_Performance();
+                log_step++;
+                
+            }else if(data == LOG_RAW_MSG) {
+                Log_Read_Raw();
+                log_step++;
+                
+            }else if(data == LOG_CMD_MSG) {
+                Log_Read_Cmd();
+                log_step++;
+                
+            }else if(data == LOG_CURRENT_MSG) {
+                Log_Read_Current();
+                log_step++;
+                
+            }else if(data == LOG_STARTUP_MSG) {
+                Log_Read_Startup();
+                log_step++;
+            }else {
+                if(data == LOG_GPS_MSG) {
+                    Log_Read_GPS();
+                    log_step++;
+                }else{
+                    cliSerial->printf_P(PSTR("Error Reading Packet: %d\n"),packet_count);
+                    log_step = 0;            // Restart, we have a problem...
+                }
+            }
+            break;
+        case 3:
+            if(data == END_BYTE) {
+                packet_count++;
+            }else{
+                cliSerial->printf_P(PSTR("Error Reading END_BYTE: %d\n"),(int)data);
+            }
+            log_step = 0;                   // Restart sequence: new packet...
+            break;
+        }
+        page = DataFlash.GetPage();
+    }
+    return packet_count;
 }
-
+                        
 #else // LOGGING_ENABLED
 
 // dummy functions
-static void Log_Write_Mode(byte mode) {
+static void Log_Write_Mode(uint8_t mode) {
 }
-static void Log_Write_Startup(byte type) {
+static void Log_Write_Startup(uint8_t type) {
 }
-static void Log_Write_Cmd(byte num, struct Location *wp) {
+static void Log_Write_Cmd(uint8_t num, struct Location *wp) {
 }
 static void Log_Write_Current() {
 }
 static void Log_Write_Nav_Tuning() {
 }
 static void Log_Write_GPS(      int32_t log_Time, int32_t log_Lattitude, int32_t log_Longitude, int32_t log_gps_alt, int32_t log_mix_alt,
-                                int32_t log_Ground_Speed, int32_t log_Ground_Course, byte log_Fix, byte log_NumSats) {
+                                int32_t log_Ground_Speed, int32_t log_Ground_Course, uint8_t log_Fix, uint8_t log_NumSats) {
 }
 static void Log_Write_Performance() {
 }

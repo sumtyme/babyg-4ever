@@ -3,7 +3,7 @@
 static void read_control_switch()
 {
 	
-	byte switchPosition = readSwitch();
+	uint8_t switchPosition = readSwitch();
 	
 	// If switchPosition = 255 this indicates that the mode control channel input was out of range
 	// If we get this value we do not want to change modes.
@@ -17,7 +17,7 @@ static void read_control_switch()
     // as a spring loaded trainer switch).
 	if (oldSwitchPosition != switchPosition ||
         (g.reset_switch_chan != 0 && 
-         APM_RC.InputCh(g.reset_switch_chan-1) > RESET_SWITCH_CHAN_PWM)) {
+         hal.rcin->read(g.reset_switch_chan-1) > RESET_SWITCH_CHAN_PWM)) {
 
 		set_mode(flight_modes[switchPosition]);
 
@@ -32,8 +32,8 @@ static void read_control_switch()
 
 }
 
-static byte readSwitch(void){
-	uint16_t pulsewidth = APM_RC.InputCh(g.flight_mode_channel - 1);
+static uint8_t readSwitch(void){
+    uint16_t pulsewidth = hal.rcin->read(g.flight_mode_channel - 1);
 	if (pulsewidth <= 910 || pulsewidth >= 2090) 	return 255;	// This is an error condition
 	if (pulsewidth > 1230 && pulsewidth <= 1360) 	return 1;
 	if (pulsewidth > 1360 && pulsewidth <= 1490) 	return 2;
@@ -76,7 +76,7 @@ static void read_trim_switch()
 				} else if (control_mode == LEARNING) {    
                     // if SW7 is ON in LEARNING = record the Wp
                     // set the next_WP (home is stored at 0)
-                    CH7_wp_index = constrain(CH7_wp_index, 1, MAX_WAYPOINTS);
+                    CH7_wp_index = constrain_int16(CH7_wp_index, 1, MAX_WAYPOINTS);
         
                     current_loc.id = MAV_CMD_NAV_WAYPOINT;  
     

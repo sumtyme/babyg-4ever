@@ -8,8 +8,8 @@
 
 #define TRUE 1
 #define FALSE 0
-#define ToRad(x) (x*0.01745329252)	// *pi/180
-#define ToDeg(x) (x*57.2957795131)	// *180/pi
+#define ToRad(x) radians(x)	// *pi/180
+#define ToDeg(x) degrees(x)	// *180/pi
 
 #define DEBUG 0
 #define SERVO_MAX 4500	// This value represents 45 degrees and is just an arbitrary representation of servo max travel.
@@ -114,7 +114,6 @@ enum ap_message {
     MSG_RADIO_IN,
     MSG_RAW_IMU1,
     MSG_RAW_IMU3,
-    MSG_GPS_STATUS,
     MSG_GPS_RAW,
     MSG_SERVO_OUT,
     MSG_NEXT_WAYPOINT,
@@ -214,9 +213,6 @@ enum gcs_severity {
 
 #define CONFIG_INS_OILPAN 1
 #define CONFIG_INS_MPU6000 2
-
-#define APM_HARDWARE_APM1  1
-#define APM_HARDWARE_APM2 2
 
 #define AP_BARO_BMP085   1
 #define AP_BARO_MS5611   2

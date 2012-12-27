@@ -6,6 +6,12 @@
 set -e
 set -x
 
+targets="clean all"
+
+[ $# -gt 0 ] && {
+    targets="$*"
+}
+
 export PATH=/usr/lib/ccache:$PATH
 
 TESTS=$(find libraries -name 'Makefile' | xargs -i dirname '{}')
@@ -16,8 +22,9 @@ for b in $TESTS; do
     if [ -r nobuild.txt ]; then
 	echo "Skipping build of $b"
     else
-	make clean
-	make
+	for t in $targets; do
+	    make $t
+	done
     fi
     popd
 done

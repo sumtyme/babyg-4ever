@@ -11,18 +11,17 @@
 //	GPS configuration : Custom protocol per "DIYDrones Custom Binary Sentence Specification V1.1"
 //
 
-#include "AP_GPS_MTK.h"
 #include <stdint.h>
 
-// Constructors ////////////////////////////////////////////////////////////////
-AP_GPS_MTK::AP_GPS_MTK(Stream *s) : GPS(s)
-{
-}
+#include <AP_HAL.h>
+
+#include "AP_GPS_MTK.h"
 
 // Public Methods //////////////////////////////////////////////////////////////
 void
-AP_GPS_MTK::init(enum GPS_Engine_Setting nav_setting)
+AP_GPS_MTK::init(AP_HAL::UARTDriver *s, enum GPS_Engine_Setting nav_setting)
 {
+	_port = s;
     _port->flush();
     // initialize serial port for binary protocol use
     // XXX should assume binary, let GPS_AUTO handle dynamic config?
@@ -36,6 +35,9 @@ AP_GPS_MTK::init(enum GPS_Engine_Setting nav_setting)
 
     // set WAAS on
     _port->print(WAAS_ON);
+
+    // Set Nav Threshold to 0 m/s
+    _port->print(MTK_NAVTHRES_OFF);
 
     // set initial epoch code
     _epoch = TIME_OF_DAY;

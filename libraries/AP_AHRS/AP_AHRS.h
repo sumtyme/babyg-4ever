@@ -1,5 +1,7 @@
-#ifndef AP_AHRS_H
-#define AP_AHRS_H
+/// -*- tab-width: 4; Mode: C++; c-basic-offset: 4; indent-tabs-mode: nil -*-
+
+#ifndef __AP_AHRS_H__
+#define __AP_AHRS_H__
 /*
  *  AHRS (Attitude Heading Reference System) interface for ArduPilot
  *
@@ -16,12 +18,7 @@
 #include <AP_GPS.h>
 #include <AP_InertialSensor.h>
 #include <AP_Baro.h>
-
-#if defined(ARDUINO) && ARDUINO >= 100
- #include "Arduino.h"
-#else
- #include "WProgram.h"
-#endif
+#include <AP_Param.h>
 
 class AP_AHRS
 {
@@ -32,6 +29,9 @@ public:
         _gps(gps),
         _barometer(NULL)
     {
+        // load default values from var_info table
+        AP_Param::setup_object_defaults(this, var_info);
+
         // base the ki values by the sensors maximum drift
         // rate. The APM2 has gyros which are much less drift
         // prone than the APM1, so we should have a lower ki,
@@ -41,24 +41,24 @@ public:
     }
 
     // empty init
-    virtual void init( AP_PeriodicProcess * scheduler = NULL ) {
+    virtual void init() {
     };
 
     // Accessors
-    void            set_fly_forward(bool b) {
+    void set_fly_forward(bool b) {
         _fly_forward = b;
     }
-    void            set_compass(Compass *compass) {
+    void set_compass(Compass *compass) {
         _compass = compass;
     }
-    void            set_barometer(AP_Baro *barometer) {
+    void set_barometer(AP_Baro *barometer) {
         _barometer = barometer;
     }
-    void            set_airspeed(AP_Airspeed *airspeed) {
+    void set_airspeed(AP_Airspeed *airspeed) {
         _airspeed = airspeed;
     }
 
-    AP_InertialSensor*            get_ins() {
+    AP_InertialSensor* get_ins() {
 	    return _ins;
     }
 
@@ -201,4 +201,4 @@ protected:
 #include <AP_AHRS_MPU6000.h>
 #include <AP_AHRS_HIL.h>
 
-#endif // AP_AHRS_H
+#endif // __AP_AHRS_H__

@@ -3,12 +3,13 @@
 /// @file	GPS.h
 /// @brief	Interface definition for the various GPS drivers.
 
-#ifndef GPS_h
-#define GPS_h
+#ifndef __GPS_H__
+#define __GPS_H__
+
+#include <AP_HAL.h>
 
 #include <inttypes.h>
-#include <Stream.h>
-#include <avr/pgmspace.h>
+#include <AP_Progmem.h>
 
 /// @class	GPS
 /// @brief	Abstract base class for GPS receiver drivers.
@@ -85,7 +86,7 @@ public:
     ///
     /// Must be implemented by the GPS driver.
     ///
-    virtual void        init(enum GPS_Engine_Setting engine_setting = GPS_ENGINE_NONE) = 0;
+    virtual void        init(AP_HAL::UARTDriver *s, enum GPS_Engine_Setting engine_setting = GPS_ENGINE_NONE) = 0;
 
     // Properties
     uint32_t time;                      ///< GPS time (milliseconds from epoch)
@@ -150,17 +151,7 @@ public:
 
 
 protected:
-    Stream      *_port;                 ///< port the GPS is attached to
-
-    /// Constructor
-    ///
-    /// @note The stream is expected to be set up and configured for the
-    ///       correct bitrate before ::init is called.
-    ///
-    /// @param	s	Stream connected to the GPS module.
-    ///
-    GPS(Stream *s) : _port(s) {
-    };
+    AP_HAL::UARTDriver *_port;   ///< port the GPS is attached to
 
     /// read from the GPS stream and update properties
     ///
@@ -202,8 +193,8 @@ protected:
 
     enum GPS_Engine_Setting _nav_setting;
 
-    void _write_progstr_block(Stream *_fs, const prog_char *pstr, uint8_t size);
-    void _send_progstr(Stream *_fs, const prog_char *pstr, uint8_t size);
+    void _write_progstr_block(AP_HAL::UARTDriver *_fs, const prog_char *pstr, uint8_t size);
+    void _send_progstr(AP_HAL::UARTDriver *_fs, const prog_char *pstr, uint8_t size);
     void _update_progstr(void);
 
     // velocities in cm/s if available from the GPS
@@ -265,4 +256,4 @@ GPS::_swapi(const void *bytes)
     return(u.v);
 }
 
-#endif
+#endif // __GPS_H__

@@ -194,8 +194,10 @@ static NOINLINE void send_extended_status1(mavlink_channel_t chan, uint16_t pack
 
 static void NOINLINE send_meminfo(mavlink_channel_t chan)
 {
+#if CONFIG_HAL_BOARD != HAL_BOARD_AVR_SITL
     extern unsigned __brkval;
     mavlink_msg_meminfo_send(chan, __brkval, memcheck_available_memory());
+#endif
 }
 
 static void NOINLINE send_location(mavlink_channel_t chan)
@@ -252,7 +254,7 @@ static void NOINLINE send_ahrs(mavlink_channel_t chan)
         ahrs.get_error_yaw());
 }
 
-#ifdef DESKTOP_BUILD
+#if CONFIG_HAL_BOARD == HAL_BOARD_AVR_SITL
 // report simulator state
 static void NOINLINE send_simstate(mavlink_channel_t chan)
 {
@@ -260,16 +262,13 @@ static void NOINLINE send_simstate(mavlink_channel_t chan)
 }
 #endif
 
-#ifndef DESKTOP_BUILD
 static void NOINLINE send_hwstatus(mavlink_channel_t chan)
 {
     mavlink_msg_hwstatus_send(
         chan,
         board_voltage(),
-        I2c.lockup_count());
+        hal.i2c->lockup_count());
 }
-#endif
-
 
 static void NOINLINE send_gps_raw(mavlink_channel_t chan)
 {
@@ -639,17 +638,15 @@ static bool mavlink_try_send_message(mavlink_channel_t chan, enum ap_message id,
         break;
 
     case MSG_SIMSTATE:
-#ifdef DESKTOP_BUILD
+#if CONFIG_HAL_BOARD == HAL_BOARD_AVR_SITL
         CHECK_PAYLOAD_SIZE(SIMSTATE);
         send_simstate(chan);
 #endif
         break;
 
     case MSG_HWSTATUS:
-#ifndef DESKTOP_BUILD
         CHECK_PAYLOAD_SIZE(HWSTATUS);
         send_hwstatus(chan);
-#endif
         break;
 
     case MSG_RETRY_DEFERRED:
@@ -761,10 +758,10 @@ GCS_MAVLINK::GCS_MAVLINK() :
 }
 
 void
-GCS_MAVLINK::init(FastSerial * port)
+GCS_MAVLINK::init(AP_HAL::UARTDriver* port)
 {
     GCS_Class::init(port);
-    if (port == &Serial) {
+    if (port == hal.uartA) {
         mavlink_comm_0_port = port;
         chan = MAVLINK_COMM_0;
     }else{
@@ -955,13 +952,7 @@ GCS_MAVLINK::send_message(enum ap_message id)
 }
 
 void
-GCS_MAVLINK::send_text(gcs_severity severity, const char *str)
-{
-    mavlink_send_text(chan,severity,str);
-}
-
-void
-GCS_MAVLINK::send_text(gcs_severity severity, const prog_char_t *str)
+GCS_MAVLINK::send_text_P(gcs_severity severity, const prog_char_t *str)
 {
     mavlink_statustext_t m;
     uint8_t i;
@@ -1062,7 +1053,7 @@ void GCS_MAVLINK::handleMessage(mavlink_message_t* msg)
         uint8_t result = MAV_RESULT_UNSUPPORTED;
 
         // do command
-        send_text(SEVERITY_LOW,PSTR("command received: "));
+        send_text_P(SEVERITY_LOW,PSTR("command received: "));
 
         switch(packet.command) {
 
@@ -1090,14 +1081,15 @@ void GCS_MAVLINK::handleMessage(mavlink_message_t* msg)
             if (packet.param1 == 1 ||
                 packet.param2 == 1 ||
                 packet.param3 == 1) {
-                ins.init_accel(mavlink_delay, flash_leds);
+                ins.init_accel(flash_leds);
             }
             if (packet.param4 == 1) {
                 trim_radio();
             }
             if (packet.param5 == 1) {
                 // this blocks
-                ins.calibrate_accel(mavlink_delay, flash_leds, gcs_send_text_fmt, setup_wait_key);
+                AP_InertialSensor_UserInteractStream interact(hal.console);
+                ins.calibrate_accel(flash_leds, &interact);
             }
             result = MAV_RESULT_ACCEPTED;
             break;
@@ -1642,7 +1634,7 @@ void GCS_MAVLINK::handleMessage(mavlink_message_t* msg)
                     msg->compid,
                     type);
 
-                send_text(SEVERITY_LOW,PSTR("flight plan received"));
+                send_text_P(SEVERITY_LOW,PSTR("flight plan received"));
                 waypoint_receiving = false;
                 // XXX ignores waypoint radius for individual waypoints, can
                 // only set WP_RADIUS parameter
@@ -1750,7 +1742,7 @@ void GCS_MAVLINK::handleMessage(mavlink_message_t* msg)
         v[5] = packet.chan6_raw;
         v[6] = packet.chan7_raw;
         v[7] = packet.chan8_raw;
-        APM_RC.setHIL(v);
+        hal.rcin->set_overrides(v, 8);
         break;
     }
 
@@ -1761,7 +1753,7 @@ void GCS_MAVLINK::handleMessage(mavlink_message_t* msg)
         mavlink_hil_state_t packet;
         mavlink_msg_hil_state_decode(msg, &packet);
 
-        float vel = sqrt((packet.vx * (float)packet.vx) + (packet.vy * (float)packet.vy));
+        float vel = pythagorous2(packet.vx, packet.vy);
         float cog = wrap_360(ToDeg(atan2(packet.vx, packet.vy)) * 100);
 
         // set gps hil sensor
@@ -1944,7 +1936,7 @@ void GCS_MAVLINK::handleMessage(mavlink_message_t* msg)
         mavlink_fence_point_t packet;
         mavlink_msg_fence_point_decode(msg, &packet);
         if (packet.count != geofence_limit.fence_total()) {
-            send_text(SEVERITY_LOW,PSTR("bad fence point"));
+            send_text_P(SEVERITY_LOW,PSTR("bad fence point"));
         } else {
             Vector2l point;
             point.x = packet.lat*1.0e7;
@@ -1960,7 +1952,7 @@ void GCS_MAVLINK::handleMessage(mavlink_message_t* msg)
         if (mavlink_check_target(packet.target_system, packet.target_component))
             break;
         if (packet.idx >= geofence_limit.fence_total()) {
-            send_text(SEVERITY_LOW,PSTR("bad fence point"));
+            send_text_P(SEVERITY_LOW,PSTR("bad fence point"));
         } else {
             Vector2l point = geofence_limit.get_fence_point_with_index(packet.idx);
             mavlink_msg_fence_point_send(chan, 0, 0, packet.idx, geofence_limit.fence_total(),
@@ -2048,42 +2040,32 @@ GCS_MAVLINK::queued_waypoint_send()
  *  MAVLink to process packets while waiting for the initialisation to
  *  complete
  */
-static void mavlink_delay(unsigned long t)
+static void mavlink_delay_cb()
 {
-    uint32_t tstart;
     static uint32_t last_1hz, last_50hz, last_5s;
 
-    if (in_mavlink_delay) {
-        // this should never happen, but let's not tempt fate by
-        // letting the stack grow too much
-        delay(t);
-        return;
-    }
+    if (!gcs0.initialised) return;
 
     in_mavlink_delay = true;
 
-    tstart = millis();
-    do {
-        uint32_t tnow = millis();
-        if (tnow - last_1hz > 1000) {
-            last_1hz = tnow;
-            gcs_send_message(MSG_HEARTBEAT);
-            gcs_send_message(MSG_EXTENDED_STATUS1);
-        }
-        if (tnow - last_50hz > 20) {
-            last_50hz = tnow;
-            gcs_update();
-            gcs_data_stream_send();
-        }
-        if (tnow - last_5s > 5000) {
-            last_5s = tnow;
-            gcs_send_text_P(SEVERITY_LOW, PSTR("Initialising APM..."));
-        }
-        delay(1);
+    uint32_t tnow = millis();
+    if (tnow - last_1hz > 1000) {
+        last_1hz = tnow;
+        gcs_send_message(MSG_HEARTBEAT);
+        gcs_send_message(MSG_EXTENDED_STATUS1);
+    }
+    if (tnow - last_50hz > 20) {
+        last_50hz = tnow;
+        gcs_update();
+        gcs_data_stream_send();
+    }
+    if (tnow - last_5s > 5000) {
+        last_5s = tnow;
+        gcs_send_text_P(SEVERITY_LOW, PSTR("Initialising APM..."));
+    }
 #if USB_MUX_PIN > 0
-        check_usb_mux();
+    check_usb_mux();
 #endif
-    } while (millis() - tstart < t);
 
     in_mavlink_delay = false;
 }
@@ -2121,19 +2103,11 @@ static void gcs_update(void)
     }
 }
 
-static void gcs_send_text(gcs_severity severity, const char *str)
-{
-    gcs0.send_text(severity, str);
-    if (gcs3.initialised) {
-        gcs3.send_text(severity, str);
-    }
-}
-
 static void gcs_send_text_P(gcs_severity severity, const prog_char_t *str)
 {
-    gcs0.send_text(severity, str);
+    gcs0.send_text_P(severity, str);
     if (gcs3.initialised) {
-        gcs3.send_text(severity, str);
+        gcs3.send_text_P(severity, str);
     }
 }
 
@@ -2144,17 +2118,11 @@ static void gcs_send_text_P(gcs_severity severity, const prog_char_t *str)
  */
 static void gcs_send_text_fmt(const prog_char_t *fmt, ...)
 {
-    char fmtstr[40];
     va_list arg_list;
-    uint8_t i;
-    for (i=0; i<sizeof(fmtstr)-1; i++) {
-        fmtstr[i] = pgm_read_byte((const prog_char *)(fmt++));
-        if (fmtstr[i] == 0) break;
-    }
-    fmtstr[i] = 0;
     pending_status.severity = (uint8_t)SEVERITY_LOW;
     va_start(arg_list, fmt);
-    vsnprintf((char *)pending_status.text, sizeof(pending_status.text), fmtstr, arg_list);
+    hal.util->vsnprintf_P((char *)pending_status.text,
+            sizeof(pending_status.text), fmt, arg_list);
     va_end(arg_list);
     mavlink_send_message(MAVLINK_COMM_0, MSG_STATUSTEXT, 0);
     if (gcs3.initialised) {

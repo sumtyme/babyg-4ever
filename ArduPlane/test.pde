@@ -14,7 +14,9 @@ static int8_t   test_adc(uint8_t argc,                  const Menu::arg *argv);
 #endif
 static int8_t   test_ins(uint8_t argc,                  const Menu::arg *argv);
 static int8_t   test_battery(uint8_t argc,              const Menu::arg *argv);
+#if CONFIG_RELAY == ENABLED
 static int8_t   test_relay(uint8_t argc,                const Menu::arg *argv);
+#endif
 static int8_t   test_wp(uint8_t argc,                   const Menu::arg *argv);
 static int8_t   test_airspeed(uint8_t argc,     const Menu::arg *argv);
 static int8_t   test_pressure(uint8_t argc,     const Menu::arg *argv);
@@ -35,7 +37,9 @@ static const struct Menu::command test_menu_commands[] PROGMEM = {
     {"passthru",            test_passthru},
     {"failsafe",            test_failsafe},
     {"battery",     test_battery},
+#if CONFIG_RELAY == ENABLED
     {"relay",                       test_relay},
+#endif
     {"waypoints",           test_wp},
     {"xbee",                        test_xbee},
     {"eedump",                      test_eedump},
@@ -82,13 +86,13 @@ static void print_hit_enter()
 static int8_t
 test_eedump(uint8_t argc, const Menu::arg *argv)
 {
-    intptr_t i, j;
+    uint16_t i, j;
 
     // hexdump the EEPROM
     for (i = 0; i < EEPROM_MAX_ADDR; i += 16) {
         cliSerial->printf_P(PSTR("%04x:"), i);
         for (j = 0; j < 16; j++)
-            cliSerial->printf_P(PSTR(" %02x"), eeprom_read_byte((const uint8_t *)(i + j)));
+            cliSerial->printf_P(PSTR(" %02x"), hal.storage->read_byte(i + j));
         cliSerial->println();
     }
     return(0);
@@ -134,12 +138,12 @@ test_passthru(uint8_t argc, const Menu::arg *argv)
         delay(20);
 
         // New radio frame? (we could use also if((millis()- timer) > 20)
-        if (APM_RC.GetState() == 1) {
+        if (hal.rcin->valid() > 0) {
             cliSerial->print_P(PSTR("CH:"));
             for(int16_t i = 0; i < 8; i++) {
-                cliSerial->print(APM_RC.InputCh(i));        // Print channel values
+                cliSerial->print(hal.rcin->read(i));        // Print channel values
                 print_comma();
-                APM_RC.OutputCh(i, APM_RC.InputCh(i)); // Copy input to Servos
+                hal.rcout->write(i, hal.rcin->read(i)); // Copy input to Servos
             }
             cliSerial->println();
         }
@@ -192,7 +196,7 @@ test_radio(uint8_t argc, const Menu::arg *argv)
 static int8_t
 test_failsafe(uint8_t argc, const Menu::arg *argv)
 {
-    byte fail_test;
+    uint8_t fail_test;
     print_hit_enter();
     for(int16_t i = 0; i < 50; i++) {
         delay(20);
@@ -280,6 +284,7 @@ test_battery(uint8_t argc, const Menu::arg *argv)
 
 }
 
+#if CONFIG_RELAY == ENABLED
 static int8_t
 test_relay(uint8_t argc, const Menu::arg *argv)
 {
@@ -302,6 +307,7 @@ test_relay(uint8_t argc, const Menu::arg *argv)
         }
     }
 }
+#endif
 
 static int8_t
 test_wp(uint8_t argc, const Menu::arg *argv)
@@ -319,7 +325,7 @@ test_wp(uint8_t argc, const Menu::arg *argv)
     cliSerial->printf_P(PSTR("Hit radius: %d\n"), (int)g.waypoint_radius);
     cliSerial->printf_P(PSTR("Loiter radius: %d\n\n"), (int)g.loiter_radius);
 
-    for(byte i = 0; i <= g.command_total; i++) {
+    for(uint8_t i = 0; i <= g.command_total; i++) {
         struct Location temp = get_cmd_with_index(i);
         test_wp_print(&temp, i);
     }
@@ -328,7 +334,7 @@ test_wp(uint8_t argc, const Menu::arg *argv)
 }
 
 static void
-test_wp_print(struct Location *cmd, byte wp_index)
+test_wp_print(struct Location *cmd, uint8_t wp_index)
 {
     cliSerial->printf_P(PSTR("command #: %d id:%d options:%d p1:%d p2:%ld p3:%ld p4:%ld \n"),
                     (int)wp_index,
@@ -349,8 +355,8 @@ test_xbee(uint8_t argc, const Menu::arg *argv)
 
     while(1) {
 
-        if (Serial3.available())
-            Serial3.write(Serial3.read());
+        if (hal.uartC->available())
+            hal.uartC->write(hal.uartC->read());
 
         if(cliSerial->available() > 0) {
             return (0);
@@ -371,7 +377,7 @@ test_modeswitch(uint8_t argc, const Menu::arg *argv)
 
     while(1) {
         delay(20);
-        byte switchPosition = readSwitch();
+        uint8_t switchPosition = readSwitch();
         if (oldSwitchPosition != switchPosition) {
             cliSerial->printf_P(PSTR("Position %d\n"),  (int)switchPosition);
             oldSwitchPosition = switchPosition;
@@ -397,12 +403,12 @@ test_logging(uint8_t argc, const Menu::arg *argv)
     cliSerial->printf_P(PSTR("Manufacturer: 0x%02x   Device: 0x%04x\n"),
                     (unsigned)DataFlash.df_manufacturer,
                     (unsigned)DataFlash.df_device);
-    cliSerial->printf_P(PSTR("NumPages: %u  PageSize: %u\n"),
-                    (unsigned)DataFlash.df_NumPages+1,
-                    (unsigned)DataFlash.df_PageSize);
+    cliSerial->printf_P(PSTR("NumPages: %u\n"),
+                    (unsigned)DataFlash.df_NumPages+1);
     DataFlash.StartRead(DataFlash.df_NumPages+1);
     cliSerial->printf_P(PSTR("Format version: %lx  Expected format version: %lx\n"),
-                    (unsigned long)DataFlash.ReadLong(), (unsigned long)DF_LOGGING_FORMAT);
+                    (unsigned long)DataFlash.ReadLong(),
+                    (unsigned long)DF_LOGGING_FORMAT);
     return 0;
 }
 
@@ -416,13 +422,13 @@ static int8_t
 test_adc(uint8_t argc, const Menu::arg *argv)
 {
     print_hit_enter();
-    adc.Init(&timer_scheduler);
+    adc.Init();
     delay(1000);
     cliSerial->printf_P(PSTR("ADC\n"));
     delay(1000);
 
     while(1) {
-        for (int16_t i=0; i<9; i++) cliSerial->printf_P(PSTR("%.1f\t"),adc.Ch(i));
+        for (int8_t i=0; i<9; i++) cliSerial->printf_P(PSTR("%.1f\t"),adc.Ch(i));
         cliSerial->println();
         delay(100);
         if(cliSerial->available() > 0) {
@@ -468,7 +474,7 @@ test_ins(uint8_t argc, const Menu::arg *argv)
     //cliSerial->printf_P(PSTR("Calibrating."));
     ins.init(AP_InertialSensor::COLD_START, 
              ins_sample_rate,
-             delay, flash_leds, &timer_scheduler);
+             flash_leds);
     ahrs.reset();
 
     print_hit_enter();
@@ -531,7 +537,7 @@ test_mag(uint8_t argc, const Menu::arg *argv)
     // we need the AHRS initialised for this test
     ins.init(AP_InertialSensor::COLD_START, 
              ins_sample_rate,
-             delay, flash_leds, &timer_scheduler);
+             flash_leds);
     ahrs.reset();
 
     int16_t counter = 0;
@@ -603,7 +609,7 @@ test_mag(uint8_t argc, const Menu::arg *argv)
 static int8_t
 test_airspeed(uint8_t argc, const Menu::arg *argv)
 {
-    float airspeed_ch = pitot_analog_source.read();
+    float airspeed_ch = pitot_analog_source->read_average();
     // cliSerial->println(pitot_analog_source.read());
     cliSerial->printf_P(PSTR("airspeed_ch: %.1f\n"), airspeed_ch);
 
@@ -666,14 +672,16 @@ test_rawgps(uint8_t argc, const Menu::arg *argv)
     delay(1000);
 
     while(1) {
-        if (Serial3.available()) {
-            digitalWrite(B_LED_PIN, LED_ON);                            // Blink Yellow LED if we are sending data to GPS
-            Serial1.write(Serial3.read());
+        // Blink Yellow LED if we are sending data to GPS
+        if (hal.uartC->available()) {
+            digitalWrite(B_LED_PIN, LED_ON);
+            hal.uartB->write(hal.uartC->read());
             digitalWrite(B_LED_PIN, LED_OFF);
         }
-        if (Serial1.available()) {
-            digitalWrite(C_LED_PIN, LED_ON);                            // Blink Red LED if we are receiving data from GPS
-            Serial3.write(Serial1.read());
+        // Blink Red LED if we are receiving data from GPS
+        if (hal.uartB->available()) {
+            digitalWrite(C_LED_PIN, LED_ON);
+            hal.uartC->write(hal.uartB->read());
             digitalWrite(C_LED_PIN, LED_OFF);
         }
         if(cliSerial->available() > 0) {

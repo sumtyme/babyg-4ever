@@ -10,25 +10,17 @@
 //
 //	GPS configuration : Custom protocol per "DIYDrones Custom Binary Sentence Specification V1.1"
 //
-
-#include <FastSerial.h>
+#include <AP_HAL.h>
 #include "AP_GPS_MTK16.h"
 #include <stdint.h>
-#if defined(ARDUINO) && ARDUINO >= 100
- #include "Arduino.h"
-#else
- #include <wiring.h>
-#endif
 
-// Constructors ////////////////////////////////////////////////////////////////
-AP_GPS_MTK16::AP_GPS_MTK16(Stream *s) : GPS(s)
-{
-}
+extern const AP_HAL::HAL& hal;
 
 // Public Methods //////////////////////////////////////////////////////////////
 void
-AP_GPS_MTK16::init(enum GPS_Engine_Setting nav_setting)
+AP_GPS_MTK16::init(AP_HAL::UARTDriver *s, enum GPS_Engine_Setting nav_setting)
 {
+	_port = s;
     _port->flush();
 
     // initialize serial port for binary protocol use
@@ -43,6 +35,9 @@ AP_GPS_MTK16::init(enum GPS_Engine_Setting nav_setting)
 
     // set WAAS on
     _port->print(WAAS_ON);
+
+    // Set Nav Threshold to 0 m/s
+    _port->print(MTK_NAVTHRES_OFF);
 
     // set initial epoch code
     _epoch = TIME_OF_DAY;
@@ -163,7 +158,7 @@ restart:
             }
 #endif
 
-            /*	Waiting on clarification of MAVLink protocol!
+            /*    Waiting on clarification of MAVLink protocol!
              *  if(!_offset_calculated && parsed) {
              *                   int32_t tempd1 = date;
              *                   int32_t day    = tempd1/10000;
@@ -188,11 +183,11 @@ restart:
 bool
 AP_GPS_MTK16::_detect(uint8_t data)
 {
-	static uint8_t payload_counter;
-	static uint8_t step;
-	static uint8_t ck_a, ck_b;
+    static uint8_t payload_counter;
+    static uint8_t step;
+    static uint8_t ck_a, ck_b;
 
-	switch (step) {
+    switch (step) {
         case 1:
             if (PREAMBLE2 == data) {
                 step++;
@@ -200,10 +195,10 @@ AP_GPS_MTK16::_detect(uint8_t data)
             }
             step = 0;
         case 0:
-			ck_b = ck_a = payload_counter = 0;
+            ck_b = ck_a = payload_counter = 0;
             if (PREAMBLE1 == data)
                 step++;
-			break;
+            break;
         case 2:
             if (data == sizeof(struct diyd_mtk_msg)) {
                 step++;
@@ -220,17 +215,15 @@ AP_GPS_MTK16::_detect(uint8_t data)
         case 4:
             step++;
             if (ck_a != data) {
-				Serial.printf("wrong ck_a\n");
                 step = 0;
             }
             break;
         case 5:
             step = 0;
             if (ck_b == data) {
-				return true;
+                return true;
             }
-			Serial.printf("wrong ck_b\n");
-			break;
-	}
+            break;
+    }
     return false;
 }

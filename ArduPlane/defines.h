@@ -8,8 +8,8 @@
 
 #define TRUE 1
 #define FALSE 0
-#define ToRad(x) (x*0.01745329252)      // *pi/180
-#define ToDeg(x) (x*57.2957795131)      // *180/pi
+#define ToRad(x) radians(x)	// *pi/180
+#define ToDeg(x) degrees(x)	// *180/pi
 
 #define DEBUG 0
 #define LOITER_RANGE 60 // for calculating power outside of loiter radius
@@ -60,16 +60,17 @@
 #define HIL_MODE_SENSORS                        2
 
 enum FlightMode {
-    MANUAL = 0,
-    CIRCLE = 1,
-    STABILIZE = 2,
+    MANUAL        = 0,
+    CIRCLE        = 1,
+    STABILIZE     = 2,
+    TRAINING      = 3,
     FLY_BY_WIRE_A = 5,
     FLY_BY_WIRE_B = 6,
-    AUTO = 10,
-    RTL = 11,
-    LOITER = 12,
-    GUIDED = 15,
-    INITIALISING = 16
+    AUTO          = 10,
+    RTL           = 11,
+    LOITER        = 12,
+    GUIDED        = 15,
+    INITIALISING  = 16
 };
 
 
@@ -224,9 +225,7 @@ enum gcs_severity {
 
 #define CONFIG_INS_OILPAN 1
 #define CONFIG_INS_MPU6000 2
-
-#define APM_HARDWARE_APM1  1
-#define APM_HARDWARE_APM2 2
+#define CONFIG_INS_STUB 3
 
 #define AP_BARO_BMP085   1
 #define AP_BARO_MS5611   2

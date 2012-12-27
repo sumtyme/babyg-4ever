@@ -1,4 +1,5 @@
 /// -*- tab-width: 4; Mode: C++; c-basic-offset: 4; indent-tabs-mode: nil -*-
+#include <AP_Progmem.h>
 #include "Compass.h"
 
 const AP_Param::GroupInfo Compass::var_info[] PROGMEM = {
@@ -7,7 +8,9 @@ const AP_Param::GroupInfo Compass::var_info[] PROGMEM = {
     AP_GROUPINFO("DEC",    2, Compass, _declination, 0),
     AP_GROUPINFO("LEARN",  3, Compass, _learn, 1), // true if learning calibration
     AP_GROUPINFO("USE",    4, Compass, _use_for_yaw, 1), // true if used for DCM yaw
+#if !defined( __AVR_ATmega1280__ )
     AP_GROUPINFO("AUTODEC",5, Compass, _auto_declination, 1),
+#endif
     AP_GROUPEND
 };
 
@@ -20,6 +23,7 @@ Compass::Compass(void) :
     _orientation(ROTATION_NONE),
     _null_init_done(false)
 {
+    AP_Param::setup_object_defaults(this, var_info);
 }
 
 // Default init method, just returns success.
@@ -59,10 +63,15 @@ Compass::set_initial_location(int32_t latitude, int32_t longitude)
 {
     // if automatic declination is configured, then compute
     // the declination based on the initial GPS fix
+#if !defined( __AVR_ATmega1280__ )
     if (_auto_declination) {
         // Set the declination based on the lat/lng from GPS
-        _declination.set(radians(AP_Declination::get_declination((float)latitude / 10000000, (float)longitude / 10000000)));
+        _declination.set(radians(
+                AP_Declination::get_declination(
+                    (float)latitude / 10000000,
+                    (float)longitude / 10000000)));
     }
+#endif
 }
 
 void

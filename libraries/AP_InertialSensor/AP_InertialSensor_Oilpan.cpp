@@ -26,7 +26,7 @@ const float AP_InertialSensor_Oilpan::_adc_constraint = 900;
 #define OILPAN_RAW_ACCEL_OFFSET ((2465.0 + 1617.0) * 0.5)
 #define OILPAN_RAW_GYRO_OFFSET  1658.0
 
-#define ToRad(x) (x*0.01745329252)  // *pi/180
+#define ToRad(x) radians(x)      // *pi/180
 // IDG500 Sensitivity (from datasheet) => 2.0mV/degree/s,
 // 0.8mV/ADC step => 0.8/3.33 = 0.4
 // Tested values : 0.4026, ?, 0.4192
@@ -41,9 +41,9 @@ AP_InertialSensor_Oilpan::AP_InertialSensor_Oilpan( AP_ADC * adc ) :
 {
 }
 
-uint16_t AP_InertialSensor_Oilpan::_init_sensor( AP_PeriodicProcess * scheduler, Sample_rate sample_rate)
+uint16_t AP_InertialSensor_Oilpan::_init_sensor( Sample_rate sample_rate)
 {
-    _adc->Init(scheduler);
+    _adc->Init();
 
     switch (sample_rate) {
     case RATE_50HZ:

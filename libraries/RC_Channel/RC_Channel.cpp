@@ -10,24 +10,21 @@
  *
  */
 
+#include <stdlib.h>
 #include <math.h>
-#include <avr/eeprom.h>
-#if defined(ARDUINO) && ARDUINO >= 100
- #include "Arduino.h"
-#else
- #include "WProgram.h"
-#endif
+
+#include <AP_HAL.h>
+extern const AP_HAL::HAL& hal;
+
+#include <AP_Math.h>
+
 #include "RC_Channel.h"
 
-#define RC_CHANNEL_ANGLE 0
-#define RC_CHANNEL_RANGE 1
-#define RC_CHANNEL_ANGLE_RAW 2
-
-/// global array with pointers to all APM RC channels, will be used by AP_Mount and AP_Camera classes
-/// It points to RC input channels, both APM1 and APM2 only have 8 input channels.
+#define NUM_CHANNELS 8
+/// global array with pointers to all APM RC channels, will be used by AP_Mount
+/// and AP_Camera classes / It points to RC input channels, both APM1 and APM2
+/// only have 8 input channels.
 RC_Channel* rc_ch[NUM_CHANNELS];
-
-APM_RC_Class *RC_Channel::_apm_rc;
 
 const AP_Param::GroupInfo RC_Channel::var_info[] PROGMEM = {
     // @Param: MIN
@@ -76,7 +73,7 @@ const AP_Param::GroupInfo RC_Channel::var_info[] PROGMEM = {
 void
 RC_Channel::set_range(int16_t low, int16_t high)
 {
-    _type           = RC_CHANNEL_RANGE;
+    _type           = RC_CHANNEL_TYPE_RANGE;
     _high           = high;
     _low            = low;
     _high_out       = high;
@@ -93,7 +90,7 @@ RC_Channel::set_range_out(int16_t low, int16_t high)
 void
 RC_Channel::set_angle(int16_t angle)
 {
-    _type   = RC_CHANNEL_ANGLE;
+    _type   = RC_CHANNEL_TYPE_ANGLE;
     _high   = angle;
 }
 
@@ -136,15 +133,28 @@ RC_Channel::set_pwm(int16_t pwm)
 {
     radio_in = pwm;
 
-    if(_type == RC_CHANNEL_RANGE) {
+    if(_type == RC_CHANNEL_TYPE_RANGE) {
         control_in = pwm_to_range();
-        //control_in = constrain(control_in, _low, _high);
-        //control_in = min(control_in, _high);
         control_in = (control_in < _dead_zone) ? 0 : control_in;
+    } else {
+        //RC_CHANNEL_TYPE_ANGLE, RC_CHANNEL_TYPE_ANGLE_RAW
+        control_in = pwm_to_angle();
+    }
+}
 
+// read input from APM_RC - create a control_in value, but use a 
+// zero value for the dead zone. When done this way the control_in
+// value can be used as servo_out to give the same output as input
+void
+RC_Channel::set_pwm_no_deadzone(int16_t pwm)
+{
+    radio_in = pwm;
+
+    if (_type == RC_CHANNEL_TYPE_RANGE) {
+        control_in = pwm_to_range_dz(0);
     } else {
         //RC_CHANNEL_ANGLE, RC_CHANNEL_ANGLE_RAW
-        control_in = pwm_to_angle();
+        control_in = pwm_to_angle_dz(0);
     }
 }
 
@@ -165,20 +175,20 @@ RC_Channel::get_failsafe(void)
 void
 RC_Channel::calc_pwm(void)
 {
-    if(_type == RC_CHANNEL_RANGE) {
+    if(_type == RC_CHANNEL_TYPE_RANGE) {
         pwm_out         = range_to_pwm();
         radio_out       = (_reverse >= 0) ? (radio_min + pwm_out) : (radio_max - pwm_out);
 
-    }else if(_type == RC_CHANNEL_ANGLE_RAW) {
+    }else if(_type == RC_CHANNEL_TYPE_ANGLE_RAW) {
         pwm_out         = (float)servo_out * .1;
         radio_out       = (pwm_out * _reverse) + radio_trim;
 
-    }else{     // RC_CHANNEL_ANGLE
+    }else{     // RC_CHANNEL_TYPE_ANGLE
         pwm_out         = angle_to_pwm();
         radio_out       = pwm_out + radio_trim;
     }
 
-    radio_out = constrain(radio_out, radio_min.get(), radio_max.get());
+    radio_out = constrain_int16(radio_out, radio_min.get(), radio_max.get());
 }
 
 // ------------------------------------------
@@ -223,7 +233,7 @@ RC_Channel::update_min_max()
   the current radio_in value using the specified dead_zone
  */
 int16_t
-RC_Channel::pwm_to_angle_dz(int16_t dead_zone)
+RC_Channel::pwm_to_angle_dz(uint16_t dead_zone)
 {
     int16_t radio_trim_high = radio_trim + dead_zone;
     int16_t radio_trim_low  = radio_trim - dead_zone;
@@ -260,25 +270,37 @@ RC_Channel::angle_to_pwm()
         return _reverse * ((long)servo_out * (long)(radio_trim - radio_min)) / (long)_high;
 }
 
-// ------------------------------------------
-
+/*
+  convert a pulse width modulation value to a value in the configured
+  range, using the specified deadzone
+ */
 int16_t
-RC_Channel::pwm_to_range()
+RC_Channel::pwm_to_range_dz(uint16_t dead_zone)
 {
-    int16_t r_in = constrain(radio_in, radio_min.get(), radio_max.get());
+    int16_t r_in = constrain_int16(radio_in, radio_min.get(), radio_max.get());
 
     if (_reverse == -1) {
 	    r_in = radio_max.get() - (r_in - radio_min.get());
     }
 
-    int16_t radio_trim_low  = radio_min + _dead_zone;
+    int16_t radio_trim_low  = radio_min + dead_zone;
 
-    if(r_in > radio_trim_low)
+    if (r_in > radio_trim_low)
         return (_low + ((long)(_high - _low) * (long)(r_in - radio_trim_low)) / (long)(radio_max - radio_trim_low));
-    else if(_dead_zone > 0)
+    else if (dead_zone > 0)
         return 0;
     else
         return _low;
+}
+
+/*
+  convert a pulse width modulation value to a value in the configured
+  range
+ */
+int16_t
+RC_Channel::pwm_to_range()
+{
+    return pwm_to_range_dz(_dead_zone);
 }
 
 
@@ -314,25 +336,19 @@ RC_Channel::norm_output()
     return ret;
 }
 
-void RC_Channel::set_apm_rc( APM_RC_Class * apm_rc )
+void RC_Channel::output()
 {
-    _apm_rc = apm_rc;
-}
-
-void
-RC_Channel::output()
-{
-    _apm_rc->OutputCh(_ch_out, radio_out);
+    hal.rcout->write(_ch_out, radio_out);
 }
 
 void
 RC_Channel::input()
 {
-    radio_in = _apm_rc->InputCh(_ch_out);
+    radio_in = hal.rcin->read(_ch_out);
 }
 
 void
 RC_Channel::enable_out()
 {
-    _apm_rc->enable_out(_ch_out);
+    hal.rcout->enable_ch(_ch_out);
 }

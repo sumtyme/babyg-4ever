@@ -3,27 +3,27 @@
 #if CLI_ENABLED == ENABLED
 
 // Functions called from the setup menu
-static int8_t   setup_radio                             (uint8_t argc, const Menu::arg *argv);
-static int8_t   setup_motors                    (uint8_t argc, const Menu::arg *argv);
-static int8_t   setup_accel                             (uint8_t argc, const Menu::arg *argv);
-static int8_t   setup_accel_scale               (uint8_t argc, const Menu::arg *argv);
-static int8_t   setup_frame                             (uint8_t argc, const Menu::arg *argv);
-static int8_t   setup_factory                   (uint8_t argc, const Menu::arg *argv);
-static int8_t   setup_erase                             (uint8_t argc, const Menu::arg *argv);
-static int8_t   setup_flightmodes               (uint8_t argc, const Menu::arg *argv);
-static int8_t   setup_batt_monitor              (uint8_t argc, const Menu::arg *argv);
-static int8_t   setup_sonar                             (uint8_t argc, const Menu::arg *argv);
-static int8_t   setup_compass                   (uint8_t argc, const Menu::arg *argv);
-static int8_t   setup_tune                              (uint8_t argc, const Menu::arg *argv);
-static int8_t   setup_range                             (uint8_t argc, const Menu::arg *argv);
+static int8_t   setup_radio             (uint8_t argc, const Menu::arg *argv);
+static int8_t   setup_motors            (uint8_t argc, const Menu::arg *argv);
+static int8_t   setup_accel             (uint8_t argc, const Menu::arg *argv);
+static int8_t   setup_accel_scale       (uint8_t argc, const Menu::arg *argv);
+static int8_t   setup_frame             (uint8_t argc, const Menu::arg *argv);
+static int8_t   setup_factory           (uint8_t argc, const Menu::arg *argv);
+static int8_t   setup_erase             (uint8_t argc, const Menu::arg *argv);
+static int8_t   setup_flightmodes       (uint8_t argc, const Menu::arg *argv);
+static int8_t   setup_batt_monitor      (uint8_t argc, const Menu::arg *argv);
+static int8_t   setup_sonar             (uint8_t argc, const Menu::arg *argv);
+static int8_t   setup_compass           (uint8_t argc, const Menu::arg *argv);
+static int8_t   setup_tune              (uint8_t argc, const Menu::arg *argv);
+static int8_t   setup_range             (uint8_t argc, const Menu::arg *argv);
 //static int8_t	setup_mag_offset		(uint8_t argc, const Menu::arg *argv);
-static int8_t   setup_declination               (uint8_t argc, const Menu::arg *argv);
-static int8_t   setup_optflow                   (uint8_t argc, const Menu::arg *argv);
+static int8_t   setup_declination       (uint8_t argc, const Menu::arg *argv);
+static int8_t   setup_optflow           (uint8_t argc, const Menu::arg *argv);
 
 
  #if FRAME_CONFIG == HELI_FRAME
-static int8_t   setup_heli                              (uint8_t argc, const Menu::arg *argv);
-static int8_t   setup_gyro                              (uint8_t argc, const Menu::arg *argv);
+static int8_t   setup_heli              (uint8_t argc, const Menu::arg *argv);
+static int8_t   setup_gyro              (uint8_t argc, const Menu::arg *argv);
  #endif
 
 // Command/function table for the setup menu
@@ -207,7 +207,7 @@ setup_radio(uint8_t argc, const Menu::arg *argv)
 
         if(cliSerial->available() > 0) {
             delay(20);
-            cliSerial->flush();
+            while (cliSerial->read() != -1); /* flush */
 
             g.rc_1.save_eeprom();
             g.rc_2.save_eeprom();
@@ -249,8 +249,8 @@ setup_accel(uint8_t argc, const Menu::arg *argv)
 {
     ins.init(AP_InertialSensor::COLD_START, 
              ins_sample_rate,
-             delay, flash_leds, &timer_scheduler);
-    ins.init_accel(delay, flash_leds);
+             flash_leds);
+    ins.init_accel(flash_leds);
     report_ins();
     return(0);
 }
@@ -263,7 +263,7 @@ static void setup_printf_P(const prog_char_t *fmt, ...)
 {
     va_list arg_list;
     va_start(arg_list, fmt);
-    cliSerial->vprintf_P(fmt, arg_list);
+    cliSerial->printf_P(fmt, arg_list);
     va_end(arg_list);
 }
 
@@ -286,8 +286,9 @@ setup_accel_scale(uint8_t argc, const Menu::arg *argv)
     cliSerial->println_P(PSTR("Initialising gyros"));
     ins.init(AP_InertialSensor::COLD_START, 
              ins_sample_rate,
-             delay, flash_leds, &timer_scheduler);
-    ins.calibrate_accel(delay, flash_leds, setup_printf_P, setup_wait_key);
+             flash_leds);
+    AP_InertialSensor_UserInteractStream interact(hal.console);
+    ins.calibrate_accel(flash_leds, &interact);
     report_ins();
     return(0);
 }
@@ -316,8 +317,8 @@ setup_frame(uint8_t argc, const Menu::arg *argv)
 static int8_t
 setup_flightmodes(uint8_t argc, const Menu::arg *argv)
 {
-    byte _switchPosition = 0;
-    byte _oldSwitchPosition = 0;
+    uint8_t _switchPosition = 0;
+    uint8_t _oldSwitchPosition = 0;
     int8_t mode = 0;
 
     cliSerial->printf_P(PSTR("\nMode switch to edit, aileron: select modes, rudder: Simple on/off\n"));
@@ -780,10 +781,10 @@ static void report_batt_monitor()
     print_blanks(2);
 }
 
-static void report_wp(byte index = 255)
+static void report_wp(uint8_t index = 255)
 {
     if(index == 255) {
-        for(byte i = 0; i < g.command_total; i++) {
+        for(uint8_t i = 0; i < g.command_total; i++) {
             struct Location temp = get_cmd_with_index(i);
             print_wp(&temp, i);
         }
@@ -966,7 +967,7 @@ print_radio_values()
 }
 
 static void
-print_switch(byte p, byte m, bool b)
+print_switch(uint8_t p, uint8_t m, bool b)
 {
     cliSerial->printf_P(PSTR("Pos %d:\t"),p);
     print_flight_mode(m);
@@ -986,12 +987,10 @@ print_done()
 
 static void zero_eeprom(void)
 {
-    byte b = 0;
-
     cliSerial->printf_P(PSTR("\nErasing EEPROM\n"));
 
-    for (uintptr_t i = 0; i < EEPROM_MAX_ADDR; i++) {
-        eeprom_write_byte((uint8_t *) i, b);
+    for (uint16_t i = 0; i < EEPROM_MAX_ADDR; i++) {
+        hal.storage->write_byte(i, 0);
     }
 
     cliSerial->printf_P(PSTR("done\n"));
@@ -1038,8 +1037,8 @@ heli_get_servo(int16_t servo_num){
 
 // Used to read integer values from the serial port
 static int16_t read_num_from_serial() {
-    byte index = 0;
-    byte timeout = 0;
+    uint8_t index = 0;
+    uint8_t timeout = 0;
     char data[5] = "";
 
     do {
@@ -1073,7 +1072,7 @@ static bool
 wait_for_yes()
 {
     int c;
-    cliSerial->flush();
+    while (cliSerial->read() != -1); /* flush */
     cliSerial->printf_P(PSTR("Y to save\n"));
 
     do {
@@ -1118,7 +1117,7 @@ init_esc()
     }
 }
 
-static void print_wp(struct Location *cmd, byte index)
+static void print_wp(struct Location *cmd, uint8_t index)
 {
    	//float t1 = (float)cmd->lat / t7;
     //float t2 = (float)cmd->lng / t7;

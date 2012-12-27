@@ -8,18 +8,17 @@
 //	License as published by the Free Software Foundation; either
 //	version 2.1 of the License, or (at your option) any later version.
 //
-#ifndef AP_GPS_SIRF_h
-#define AP_GPS_SIRF_h
+#ifndef __AP_GPS_SIRF_H__
+#define __AP_GPS_SIRF_H__
 
+#include <AP_HAL.h>
 #include "GPS.h"
 
 #define SIRF_SET_BINARY "$PSRF100,0,38400,8,1,0*3C"
 
 class AP_GPS_SIRF : public GPS {
 public:
-    AP_GPS_SIRF(Stream *s);
-
-    virtual void        init(enum GPS_Engine_Setting nav_setting = GPS_ENGINE_NONE);
+    virtual void        init(AP_HAL::UARTDriver *s, enum GPS_Engine_Setting nav_setting = GPS_ENGINE_NONE);
     virtual bool        read();
 	static bool         _detect(uint8_t data);
 

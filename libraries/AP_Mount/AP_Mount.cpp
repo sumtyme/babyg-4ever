@@ -1,7 +1,7 @@
 // -*- tab-width: 4; Mode: C++; c-basic-offset: 4; indent-tabs-mode: t -*-
 
-#include <FastSerial.h>
 #include <AP_Common.h>
+#include <AP_Progmem.h>
 #include <AP_Param.h>
 #include <AP_Mount.h>
 
@@ -171,11 +171,12 @@ const AP_Param::GroupInfo AP_Mount::var_info[] PROGMEM = {
     AP_GROUPEND
 };
 
-extern RC_Channel* rc_ch[NUM_CHANNELS];
+extern RC_Channel* rc_ch[8];
 
 AP_Mount::AP_Mount(const struct Location *current_loc, GPS *&gps, AP_AHRS *ahrs, uint8_t id) :
     _gps(gps)
 {
+	AP_Param::setup_object_defaults(this, var_info);
     _ahrs = ahrs;
     _current_loc = current_loc;
 
@@ -533,7 +534,7 @@ AP_Mount::calc_GPS_target_angle(struct Location *target)
     float GPS_vector_x = (target->lng-_current_loc->lng)*cos(ToRad((_current_loc->lat+target->lat)*.00000005))*.01113195;
     float GPS_vector_y = (target->lat-_current_loc->lat)*.01113195;
     float GPS_vector_z = (target->alt-_current_loc->alt);                 // baro altitude(IN CM) should be adjusted to known home elevation before take off (Set altimeter).
-    float target_distance = 100.0*sqrt(GPS_vector_x*GPS_vector_x + GPS_vector_y*GPS_vector_y);      // Careful , centimeters here locally. Baro/alt is in cm, lat/lon is in meters.
+    float target_distance = 100.0*pythagorous2(GPS_vector_x, GPS_vector_y);      // Careful , centimeters here locally. Baro/alt is in cm, lat/lon is in meters.
     _roll_control_angle  = 0;
     _tilt_control_angle  = atan2(GPS_vector_z, target_distance);
     _pan_control_angle   = atan2(GPS_vector_x, GPS_vector_y);

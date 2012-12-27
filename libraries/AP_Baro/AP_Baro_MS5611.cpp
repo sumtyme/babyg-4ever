@@ -32,13 +32,10 @@
  *
  */
 
-#include <FastSerial.h>
-#include <SPI.h>
+#include <AP_HAL.h>
 #include "AP_Baro_MS5611.h"
 
-
-/* on APM v.24 MS5661_CS is PG1 (Arduino pin 40) */
-#define MS5611_CS 40
+extern const AP_HAL::HAL& hal;
 
 #define CMD_MS5611_RESET 0x1E
 #define CMD_MS5611_PROM_Setup 0xA0
@@ -60,66 +57,60 @@ uint8_t AP_Baro_MS5611::_state;
 uint32_t AP_Baro_MS5611::_timer;
 bool volatile AP_Baro_MS5611::_updated;
 
+AP_HAL::SPIDeviceDriver* AP_Baro_MS5611::_spi = NULL;
+AP_HAL::Semaphore* AP_Baro_MS5611::_spi_sem = NULL;
+
 uint8_t AP_Baro_MS5611::_spi_read(uint8_t reg)
 {
-    uint8_t return_value;
-    uint8_t addr = reg; // | 0x80; // Set most significant bit
-    digitalWrite(MS5611_CS, LOW);
-    SPI.transfer(addr); // discarded
-    return_value = SPI.transfer(0);
-    digitalWrite(MS5611_CS, HIGH);
-    return return_value;
+    uint8_t tx[2];
+    uint8_t rx[2];
+    tx[0] = reg; tx[1] = 0;
+    _spi->transaction(tx, rx, 2);
+    return rx[1];
 }
 
 uint16_t AP_Baro_MS5611::_spi_read_16bits(uint8_t reg)
 {
-    uint8_t byteH, byteL;
-    uint16_t return_value;
-    uint8_t addr = reg; // | 0x80; // Set most significant bit
-    digitalWrite(MS5611_CS, LOW);
-    SPI.transfer(addr); // discarded
-    byteH = SPI.transfer(0);
-    byteL = SPI.transfer(0);
-    digitalWrite(MS5611_CS, HIGH);
-    return_value = ((uint16_t)byteH<<8) | (byteL);
-    return return_value;
+    uint8_t tx[3];
+    uint8_t rx[3];
+    tx[0] = reg; tx[1] = 0; tx[2] = 0;
+    _spi->transaction(tx, rx, 3);
+    return ((uint16_t) rx[1] << 8 ) | ( rx[2] );
 }
 
 uint32_t AP_Baro_MS5611::_spi_read_adc()
 {
-    uint8_t byteH,byteM,byteL;
-    uint32_t return_value;
-    uint8_t addr = 0x00;
-    digitalWrite(MS5611_CS, LOW);
-    SPI.transfer(addr); // discarded
-    byteH = SPI.transfer(0);
-    byteM = SPI.transfer(0);
-    byteL = SPI.transfer(0);
-    digitalWrite(MS5611_CS, HIGH);
-    return_value = (((uint32_t)byteH)<<16) | (((uint32_t)byteM)<<8) | (byteL);
-    return return_value;
+    uint8_t tx[4];
+    uint8_t rx[4];
+    memset(tx, 0, 4); /* first byte is addr = 0 */
+    _spi->transaction(tx, rx, 4);
+    return (((uint32_t)rx[1])<<16) | (((uint32_t)rx[2])<<8) | ((uint32_t)rx[3]);
 }
 
 
 void AP_Baro_MS5611::_spi_write(uint8_t reg)
 {
-    digitalWrite(MS5611_CS, LOW);
-    SPI.transfer(reg); // discarded
-    digitalWrite(MS5611_CS, HIGH);
+    uint8_t tx[1];
+    tx[0] = reg;
+    _spi->transaction(tx, NULL, 1);
 }
 
 // Public Methods //////////////////////////////////////////////////////////////
 // SPI should be initialized externally
-bool AP_Baro_MS5611::init( AP_PeriodicProcess *scheduler )
+bool AP_Baro_MS5611::init()
 {
-    scheduler->suspend_timer();
+    _spi = hal.spi->device(AP_HAL::SPIDevice_MS5611);
+    if (_spi == NULL) {
+        hal.scheduler->panic(PSTR("PANIC: AP_Baro_MS5611 could not get "
+                    "valid SPI device driver!"));
+        return false;
+    }
+    _spi_sem = _spi->get_semaphore();
 
-    pinMode(MS5611_CS, OUTPUT);          // Chip select Pin
-    digitalWrite(MS5611_CS, HIGH);
-    delay(1);
+    hal.scheduler->suspend_timer_procs();
 
     _spi_write(CMD_MS5611_RESET);
-    delay(4);
+    hal.scheduler->delay(4);
 
     // We read the factory calibration
     // The on-chip CRC is not used
@@ -133,7 +124,7 @@ bool AP_Baro_MS5611::init( AP_PeriodicProcess *scheduler )
 
     //Send a command to read Temp first
     _spi_write(CMD_CONVERT_D2_OSR4096);
-    _timer = micros();
+    _timer = hal.scheduler->micros();
     _state = 0;
     Temp=0;
     Press=0;
@@ -143,11 +134,20 @@ bool AP_Baro_MS5611::init( AP_PeriodicProcess *scheduler )
     _d1_count = 0;
     _d2_count = 0;
 
-    scheduler->resume_timer();
-    scheduler->register_process( AP_Baro_MS5611::_update );
+    hal.scheduler->register_timer_process( AP_Baro_MS5611::_update );
+    hal.scheduler->resume_timer_procs();
 
     // wait for at least one value to be read
-    while (!_updated) ;
+    uint32_t tstart = hal.scheduler->millis();
+    while (!_updated) {
+        hal.scheduler->delay(10);
+        if (hal.scheduler->millis() - tstart > 1000) {
+            hal.scheduler->panic(PSTR("PANIC: AP_Baro_MS5611 took more than "
+                        "1000ms to initialize"));
+            healthy = false;
+            return false;
+        }
+    }
 
     healthy = true;
     return true;
@@ -166,10 +166,25 @@ void AP_Baro_MS5611::_update(uint32_t tnow)
         return;
     }
 
+    static int semfail_ctr = 0;
+    if (_spi_sem) {
+        bool got = _spi_sem->get((void*)&_spi_sem);
+        if (!got) {
+            semfail_ctr++;
+            if (semfail_ctr > 100) {
+                hal.scheduler->panic(PSTR("PANIC: failed to take _spi_sem "
+                            "100 times in AP_Baro_MS5611::_update"));
+            }
+            return;
+        } else {
+            semfail_ctr = 0;
+        }
+    }
+
     _timer = tnow;
 
     if (_state == 0) {
-        _s_D2 += _spi_read_adc();                                // On state 0 we read temp
+        _s_D2 += _spi_read_adc();// On state 0 we read temp
         _d2_count++;
         if (_d2_count == 32) {
             // we have summed 32 values. This only happens
@@ -191,12 +206,21 @@ void AP_Baro_MS5611::_update(uint32_t tnow)
             _d1_count = 64;
         }
         _state++;
-        _updated = true;                                                        // New pressure reading
+        // Now a new reading exists
+        _updated = true;
         if (_state == 5) {
             _spi_write(CMD_CONVERT_D2_OSR4096); // Command to read temperature
             _state = 0;
         } else {
             _spi_write(CMD_CONVERT_D1_OSR4096); // Command to read pressure
+        }
+    }
+
+    if (_spi_sem) {
+        bool released = _spi_sem->release((void*)&_spi_sem);
+        if (!released) {
+            hal.scheduler->panic(PSTR("PANIC: _spi_sem release failed in "
+                        "AP_Baro_MS5611::_update"));
         }
     }
 }
@@ -209,14 +233,13 @@ uint8_t AP_Baro_MS5611::read()
         uint8_t d1count, d2count;
         // we need to disable interrupts to access
         // _s_D1 and _s_D2 as they are not atomic
-        uint8_t oldSREG = SREG;
-        cli();
+        hal.scheduler->begin_atomic();
         sD1 = _s_D1; _s_D1 = 0;
         sD2 = _s_D2; _s_D2 = 0;
         d1count = _d1_count; _d1_count = 0;
         d2count = _d2_count; _d2_count = 0;
         _updated = false;
-        SREG = oldSREG;
+        hal.scheduler->end_atomic();
         if (d1count != 0) {
             D1 = ((float)sD1) / d1count;
         }
@@ -229,7 +252,7 @@ uint8_t AP_Baro_MS5611::read()
     }
     _calculate();
     if (updated) {
-        _last_update = millis();
+        _last_update = hal.scheduler->millis();
     }
     return updated ? 1 : 0;
 }

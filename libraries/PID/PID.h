@@ -3,10 +3,12 @@
 /// @file	PID.h
 /// @brief	Generic PID algorithm, with EEPROM-backed storage of constants.
 
-#ifndef PID_h
-#define PID_h
+#ifndef __PID_H__
+#define __PID_H__
 
 #include <AP_Common.h>
+#include <AP_Param.h>
+#include <stdlib.h>
 #include <math.h>               // for fabs()
 
 /// @class	PID
@@ -19,6 +21,7 @@ public:
         const float &   initial_d = 0.0,
         const int16_t & initial_imax = 0)
     {
+		AP_Param::setup_object_defaults(this, var_info);
         _kp = initial_p;
         _ki = initial_i;
         _kd = initial_d;
@@ -104,10 +107,10 @@ private:
     AP_Float        _kd;
     AP_Int16        _imax;
 
-    float           _integrator;                                ///< integrator value
-    int32_t         _last_error;                                ///< last error for derivative
-    float           _last_derivative;                           ///< last derivative for low-pass filter
-    uint32_t        _last_t;                                    ///< last time get_pid() was called in millis
+    float           _integrator;///< integrator value
+    int32_t         _last_error;///< last error for derivative
+    float           _last_derivative;///< last derivative for low-pass filter
+    uint32_t        _last_t;///< last time get_pid() was called in millis
 
     int32_t         _get_pid(int32_t error, uint16_t dt, float scaler);
 

@@ -7,6 +7,7 @@
 #ifndef AP_CAMERA_H
 #define AP_CAMERA_H
 
+#include <AP_Param.h>
 #include <AP_Common.h>
 #include <GCS_MAVLink.h>
 
@@ -38,6 +39,7 @@ public:
         _trigger_counter(0),            // count of number of cycles shutter has been held open
         _thr_pic_counter(0)             // timer variable for throttle_pic
     {
+		AP_Param::setup_object_defaults(this, var_info);
     }
 
     // single entry point to take pictures

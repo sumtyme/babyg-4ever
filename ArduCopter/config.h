@@ -21,7 +21,6 @@
 //
 // - Try to keep this file organised in the same order as APM_Config.h.example
 //
-
 #include "defines.h"
 
 ///
@@ -41,19 +40,19 @@
 //////////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////////
 
-//////////////////////////////////////////////////////////////////////////////
-// APM HARDWARE
-//
 
-#ifndef CONFIG_APM_HARDWARE
- # define CONFIG_APM_HARDWARE APM_HARDWARE_APM1
+#ifdef CONFIG_APM_HARDWARE
+#error CONFIG_APM_HARDWARE option is deprecated! use CONFIG_HAL_BOARD instead
 #endif
 
+#ifndef CONFIG_HAL_BOARD
+#error CONFIG_HAL_BOARD must be defined to build ArduCopter
+#endif
 //////////////////////////////////////////////////////////////////////////////
 // APM2 HARDWARE DEFAULTS
 //
 
-#if CONFIG_APM_HARDWARE == APM_HARDWARE_APM2
+#if CONFIG_HAL_BOARD == HAL_BOARD_APM2
  # define CONFIG_IMU_TYPE   CONFIG_IMU_MPU6000
  # define CONFIG_PUSHBUTTON DISABLED
  # define CONFIG_RELAY      DISABLED
@@ -65,6 +64,13 @@
  # else // APM2 Production Hardware (default)
   #  define CONFIG_BARO     AP_BARO_MS5611
  # endif
+#elif CONFIG_HAL_BOARD == HAL_BOARD_AVR_SITL
+ # define CONFIG_IMU_TYPE   CONFIG_IMU_SITL
+ # define CONFIG_PUSHBUTTON DISABLED
+ # define CONFIG_RELAY      DISABLED
+ # define MAG_ORIENTATION   AP_COMPASS_COMPONENTS_DOWN_PINS_FORWARD
+ # define CONFIG_SONAR_SOURCE SONAR_SOURCE_ANALOG_PIN
+ # define MAGNETOMETER ENABLED
 #endif
 
 //////////////////////////////////////////////////////////////////////////////
@@ -96,7 +102,8 @@
   # define HELI_ROLL_FF					0
   # define HELI_YAW_FF					0  
   # define RC_FAST_SPEED 				125
- #endif
+  # define STABILIZE_THROTTLE			THROTTLE_MANUAL
+#endif
 
 
 // optical flow doesn't work in SITL yet
@@ -133,7 +140,7 @@
 ////////////////////////////////////////////////////////
 // LED and IO Pins
 //
-#if CONFIG_APM_HARDWARE == APM_HARDWARE_APM1
+#if CONFIG_HAL_BOARD == HAL_BOARD_APM1
  # define A_LED_PIN        37
  # define B_LED_PIN        36
  # define C_LED_PIN        35
@@ -143,10 +150,9 @@
  # define PUSHBUTTON_PIN   41
  # define USB_MUX_PIN      -1
  # define CLI_SLIDER_ENABLED DISABLED
- # define OPTFLOW_CS_PIN   34
  # define BATTERY_VOLT_PIN      0      // Battery voltage on A0
  # define BATTERY_CURR_PIN      1      // Battery current on A1
-#elif CONFIG_APM_HARDWARE == APM_HARDWARE_APM2
+#elif CONFIG_HAL_BOARD == HAL_BOARD_APM2
  # define A_LED_PIN        27
  # define B_LED_PIN        26
  # define C_LED_PIN        25
@@ -156,9 +162,20 @@
  # define PUSHBUTTON_PIN   (-1)
  # define CLI_SLIDER_ENABLED DISABLED
  # define USB_MUX_PIN      23
- # define OPTFLOW_CS_PIN   A3
  # define BATTERY_VOLT_PIN      1      // Battery voltage on A1
  # define BATTERY_CURR_PIN      2      // Battery current on A2
+#elif CONFIG_HAL_BOARD == HAL_BOARD_AVR_SITL
+ # define A_LED_PIN        27
+ # define B_LED_PIN        26
+ # define C_LED_PIN        25
+ # define LED_ON           LOW
+ # define LED_OFF          HIGH
+ # define SLIDE_SWITCH_PIN (-1)
+ # define PUSHBUTTON_PIN   (-1)
+ # define CLI_SLIDER_ENABLED DISABLED
+ # define USB_MUX_PIN      -1
+ # define BATTERY_VOLT_PIN 1      // Battery voltage on A1
+ # define BATTERY_CURR_PIN 2      // Battery current on A2
 #endif
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -172,7 +189,7 @@
 #define COPTER_LED_ON           HIGH
 #define COPTER_LED_OFF          LOW
 
-#if CONFIG_APM_HARDWARE == APM_HARDWARE_APM2
+#if CONFIG_HAL_BOARD == HAL_BOARD_APM2
  #define COPTER_LED_1 AN4       // Motor or Aux LED
  #define COPTER_LED_2 AN5       // Motor LED or Beeper
  #define COPTER_LED_3 AN6       // Motor or GPS LED
@@ -181,7 +198,7 @@
  #define COPTER_LED_6 AN9       // Motor LED
  #define COPTER_LED_7 AN10      // Motor LED
  #define COPTER_LED_8 AN11      // Motor LED
-#elif CONFIG_APM_HARDWARE == APM_HARDWARE_APM1
+#elif CONFIG_HAL_BOARD == HAL_BOARD_APM1 || CONFIG_HAL_BOARD == HAL_BOARD_AVR_SITL
  #define COPTER_LED_1 AN8       // Motor or Aux LED
  #define COPTER_LED_2 AN9       // Motor LED
  #define COPTER_LED_3 AN10      // Motor or GPS LED
@@ -234,7 +251,7 @@
  # endif
 #elif CONFIG_SONAR_SOURCE == SONAR_SOURCE_ANALOG_PIN
  # ifndef CONFIG_SONAR_SOURCE_ANALOG_PIN
-  #  define CONFIG_SONAR_SOURCE_ANALOG_PIN A0
+  #  define CONFIG_SONAR_SOURCE_ANALOG_PIN 0
  # endif
 #else
  # warning Invalid value for CONFIG_SONAR_SOURCE, disabling sonar
@@ -317,8 +334,8 @@
 #endif
 
 // Battery failsafe
-#ifndef BATTERY_FAILSAFE
- # define BATTERY_FAILSAFE              DISABLED
+#ifndef FS_BATTERY
+ # define FS_BATTERY              DISABLED
 #endif
 
 
@@ -413,22 +430,17 @@
 
 
 //////////////////////////////////////////////////////////////////////////////
-// THROTTLE_FAILSAFE
-// THROTTLE_FS_VALUE
-// THROTTLE_FAILSAFE_ACTION
+// Throttle Failsafe
 //
-#ifndef THROTTLE_FAILSAFE
- # define THROTTLE_FAILSAFE                      DISABLED
-#endif
-#ifndef THROTTE_FS_VALUE
- # define THROTTLE_FS_VALUE                      975
+// possible values for FS_THR parameter
+#define FS_THR_DISABLED                    0
+#define FS_THR_ENABLED_ALWAYS_RTL          1
+#define FS_THR_ENABLED_CONTINUE_MISSION    2
+
+#ifndef FS_THR_VALUE_DEFAULT
+ # define FS_THR_VALUE_DEFAULT             975
 #endif
 
-#define THROTTLE_FAILSAFE_ACTION_ALWAYS_RTL         1
-#define THROTTLE_FAILSAFE_ACTION_CONTINUE_MISSION   2
-#ifndef THROTTLE_FAILSAFE_ACTION
- # define THROTTLE_FAILSAFE_ACTION                  THROTTLE_FAILSAFE_ACTION_CONTINUE_MISSION
-#endif
 
 #ifndef MINIMUM_THROTTLE
  # define MINIMUM_THROTTLE       130
@@ -533,6 +545,11 @@
 // used to specify frame to rate controllers
 #define EARTH_FRAME     0
 #define BODY_FRAME      1
+
+// Stabilize Mode
+#ifndef STABILIZE_THROTTLE
+ # define STABILIZE_THROTTLE		THROTTLE_MANUAL_TILT_COMPENSATED
+#endif
 
 // Alt Hold Mode
 #ifndef ALT_HOLD_YAW
@@ -661,15 +678,9 @@
  # define ACRO_P                 4.5
 #endif
 
-
 #ifndef AXIS_LOCK_ENABLED
  # define AXIS_LOCK_ENABLED      ENABLED
 #endif
-
-#ifndef AXIS_LOCK_P
- # define AXIS_LOCK_P            .02
-#endif
-
 
 // Good for smaller payload motors.
 #ifndef STABILIZE_ROLL_P
@@ -718,10 +729,10 @@
  # define MAX_INPUT_PITCH_ANGLE     4500
 #endif
 #ifndef RATE_ROLL_P
- # define RATE_ROLL_P        		0.175
+ # define RATE_ROLL_P        		0.150
 #endif
 #ifndef RATE_ROLL_I
- # define RATE_ROLL_I        		0.010
+ # define RATE_ROLL_I        		0.100
 #endif
 #ifndef RATE_ROLL_D
  # define RATE_ROLL_D        		0.004
@@ -731,10 +742,10 @@
 #endif
 
 #ifndef RATE_PITCH_P
- # define RATE_PITCH_P       		0.175
+ # define RATE_PITCH_P       		0.150
 #endif
 #ifndef RATE_PITCH_I
- # define RATE_PITCH_I       		0.010
+ # define RATE_PITCH_I       		0.100
 #endif
 #ifndef RATE_PITCH_D
  # define RATE_PITCH_D       		0.004
@@ -754,15 +765,6 @@
 #endif
 #ifndef RATE_YAW_IMAX
  # define RATE_YAW_IMAX            	8.0          // degrees
-#endif
-
-
-#ifndef STABILIZE_D
- # define STABILIZE_D            	0.00
-#endif
-
-#ifndef STABILIZE_D_SCHEDULE
- # define STABILIZE_D_SCHEDULE      0.5
 #endif
 
 
@@ -788,6 +790,10 @@
 
 #ifndef ACRO_BALANCE_PITCH
  #define ACRO_BALANCE_PITCH			200
+#endif
+
+#ifndef ACRO_TRAINER_ENABLED
+ #define ACRO_TRAINER_ENABLED       ENABLED
 #endif
 
 //////////////////////////////////////////////////////////////////////////////
@@ -1046,8 +1052,8 @@
  # define WP_RADIUS_DEFAULT      2
 #endif
 
-#ifndef LOITER_RADIUS
- # define LOITER_RADIUS 10              // meters for circle mode
+#ifndef CIRCLE_RADIUS
+ # define CIRCLE_RADIUS 10              // meters for circle mode
 #endif
 
 #ifndef USE_CURRENT_ALT

@@ -50,23 +50,23 @@
 //////////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////////
 
+#ifdef CONFIG_APM_HARDWARE
+#error CONFIG_APM_HARDWARE option is depreated! use CONFIG_HAL_BOARD instead.
+#endif
+
 //////////////////////////////////////////////////////////////////////////////
 // APM HARDWARE
 //
 
-#ifndef CONFIG_APM_HARDWARE
- # define CONFIG_APM_HARDWARE APM_HARDWARE_APM1
-#endif
-
 #if defined( __AVR_ATmega1280__ )
  // default choices for a 1280. We can't fit everything in, so we 
- // make some popular choices
+ // make some popular choices by default
  #define LOGGING_ENABLED DISABLED
  #ifndef CONFIG_RELAY
- # define CONFIG_RELAY    DISABLED
+ # define CONFIG_RELAY DISABLED
  #endif
  #ifndef GEOFENCE_ENABLED
- # define GEOFENCE_ENABLED    DISABLED
+ # define GEOFENCE_ENABLED DISABLED
  #endif
  #ifndef CLI_ENABLED
  # define CLI_ENABLED DISABLED
@@ -75,28 +75,11 @@
  # define MOUNT2 DISABLED
  #endif
  #ifndef MOUNT
- # define MOUNT ENABLED
+ # define MOUNT DISABLED
  #endif
  #ifndef CAMERA
  # define CAMERA DISABLED
  #endif
-#endif
-
-//////////////////////////////////////////////////////////////////////////////
-// APM2 HARDWARE DEFAULTS
-//
-
-#if CONFIG_APM_HARDWARE == APM_HARDWARE_APM2
- # define CONFIG_INS_TYPE   CONFIG_INS_MPU6000
- # define CONFIG_RELAY      DISABLED
- # define MAG_ORIENTATION   AP_COMPASS_APM2_SHIELD
- # define CONFIG_PITOT_SOURCE PITOT_SOURCE_ANALOG_PIN
- # define MAGNETOMETER ENABLED
- # ifdef APM2_BETA_HARDWARE
-  #  define CONFIG_BARO     AP_BARO_BMP085
- # else // APM2 Production Hardware (default)
-  #  define CONFIG_BARO     AP_BARO_MS5611
- # endif
 #endif
 
 // use this to enable telemetry on UART2. This is used
@@ -106,19 +89,24 @@
 #endif
 
 //////////////////////////////////////////////////////////////////////////////
-// LED and IO Pins
+// main board differences
 //
-#if CONFIG_APM_HARDWARE == APM_HARDWARE_APM1
+#if CONFIG_HAL_BOARD == HAL_BOARD_APM1
  # define A_LED_PIN        37
  # define B_LED_PIN        36
  # define C_LED_PIN        35
  # define LED_ON           HIGH
  # define LED_OFF          LOW
  # define USB_MUX_PIN      -1
+#ifndef CONFIG_RELAY
  # define CONFIG_RELAY     ENABLED
+#endif
  # define BATTERY_VOLT_PIN      0      // Battery voltage on A0
  # define BATTERY_CURR_PIN      1      // Battery current on A1
-#elif CONFIG_APM_HARDWARE == APM_HARDWARE_APM2
+ # define CONFIG_INS_TYPE CONFIG_INS_OILPAN
+ # define CONFIG_PITOT_SOURCE PITOT_SOURCE_ADC
+ # define CONFIG_BARO     AP_BARO_BMP085
+#elif CONFIG_HAL_BOARD == HAL_BOARD_APM2
  # define A_LED_PIN        27
  # define B_LED_PIN        26
  # define C_LED_PIN        25
@@ -129,17 +117,32 @@
  #else
   # define USB_MUX_PIN 23
  #endif
+ # define CONFIG_RELAY    DISABLED
  # define BATTERY_VOLT_PIN      1      // Battery voltage on A1
  # define BATTERY_CURR_PIN      2      // Battery current on A2
+ # define CONFIG_INS_TYPE CONFIG_INS_MPU6000
+ # define CONFIG_PITOT_SOURCE PITOT_SOURCE_ANALOG_PIN
+ # define MAG_ORIENTATION   AP_COMPASS_APM2_SHIELD
+ # define MAGNETOMETER ENABLED
+ # ifdef APM2_BETA_HARDWARE
+ #  define CONFIG_BARO     AP_BARO_BMP085
+ # else // APM2 Production Hardware (default)
+ #  define CONFIG_BARO     AP_BARO_MS5611
+ # endif
+#elif CONFIG_HAL_BOARD == HAL_BOARD_AVR_SITL
+ # define A_LED_PIN        27
+ # define B_LED_PIN        26
+ # define C_LED_PIN        25
+ # define LED_ON           LOW
+ # define LED_OFF          HIGH
+ # define CONFIG_RELAY    DISABLED
+ # define BATTERY_VOLT_PIN      1      // Battery voltage on A1
+ # define BATTERY_CURR_PIN      2      // Battery current on A2
+ # define CONFIG_INS_TYPE CONFIG_INS_STUB
+ # define CONFIG_PITOT_SOURCE PITOT_SOURCE_ANALOG_PIN
+ # define MAGNETOMETER ENABLED
 #endif
 
-
-//////////////////////////////////////////////////////////////////////////////
-// INS Selection
-//
-#ifndef CONFIG_INS_TYPE
- # define CONFIG_INS_TYPE CONFIG_INS_OILPAN
-#endif
 
 //////////////////////////////////////////////////////////////////////////////
 // ADC Enable - used to eliminate for systems which don't have ADC.
@@ -252,6 +255,7 @@
 #ifndef MAGNETOMETER
  # define MAGNETOMETER                   DISABLED
 #endif
+
 #ifndef MAG_ORIENTATION
  # define MAG_ORIENTATION                AP_COMPASS_COMPONENTS_DOWN_PINS_FORWARD
 #endif

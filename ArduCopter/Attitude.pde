@@ -130,7 +130,7 @@ get_roll_rate_stabilized_ef(int32_t stick_angle)
     roll_axis = wrap_180(roll_axis);
 
     // ensure that we don't reach gimbal lock
-    if (roll_axis > 4500 || roll_axis < -4500) {
+    if (labs(roll_axis > 4500) && g.acro_trainer_enabled) {
         roll_axis	= constrain(roll_axis, -4500, 4500);
         angle_error = wrap_180(roll_axis - ahrs.roll_sensor);
     } else {
@@ -166,7 +166,7 @@ get_pitch_rate_stabilized_ef(int32_t stick_angle)
     pitch_axis = wrap_180(pitch_axis);
 
     // ensure that we don't reach gimbal lock
-    if (pitch_axis > 4500 || pitch_axis < -4500) {
+    if (labs(pitch_axis) > 4500) {
         pitch_axis	= constrain(pitch_axis, -4500, 4500);
         angle_error = wrap_180(pitch_axis - ahrs.pitch_sensor);
     } else {
@@ -589,7 +589,7 @@ get_rate_yaw(int32_t target_rate)
 static int32_t
 get_of_roll(int32_t input_roll)
 {
-#ifdef OPTFLOW_ENABLED
+#if OPTFLOW == ENABLED
     static float tot_x_cm = 0;      // total distance from target
     static uint32_t last_of_roll_update = 0;
     int32_t new_roll = 0;
@@ -643,7 +643,7 @@ get_of_roll(int32_t input_roll)
 static int32_t
 get_of_pitch(int32_t input_pitch)
 {
-#ifdef OPTFLOW_ENABLED
+#if OPTFLOW == ENABLED
     static float tot_y_cm = 0;  // total distance from target
     static uint32_t last_of_pitch_update = 0;
     int32_t new_pitch = 0;
@@ -951,7 +951,7 @@ get_throttle_rate(int16_t z_target_speed)
 
     // calculate rate error
 #if INERTIAL_NAV_Z == ENABLED
-    z_rate_error    = z_target_speed - inertial_nav._velocity.z;    // calc the speed error
+    z_rate_error    = z_target_speed - inertial_nav.get_velocity_z();    // calc the speed error
 #else
     z_rate_error    = z_target_speed - climb_rate;              // calc the speed error
 #endif
@@ -1007,7 +1007,7 @@ get_throttle_rate_stabilized(int16_t target_rate)
     static float alt_rate = 0;      // the desired climb rate in cm/s.
     static uint32_t last_call_ms = 0;
 
-    float altitude_error;
+    float _altitude_error;
     int16_t desired_rate;
     int16_t alt_error_max;
     uint32_t now = millis();
@@ -1023,10 +1023,10 @@ get_throttle_rate_stabilized(int16_t target_rate)
     alt_desired += alt_rate * 0.02;
 
     alt_error_max = constrain(600-abs(target_rate),100,600);
-    altitude_error = constrain(alt_desired - current_loc.alt, -alt_error_max, alt_error_max);
-    alt_desired = current_loc.alt + altitude_error;
+    _altitude_error = constrain(alt_desired - current_loc.alt, -alt_error_max, alt_error_max);
+    alt_desired = current_loc.alt + _altitude_error;
 
-    desired_rate = g.pi_alt_hold.get_p(altitude_error);
+    desired_rate = g.pi_alt_hold.get_p(_altitude_error);
     desired_rate = constrain(desired_rate, -200, 200) + target_rate;
     desired_rate = constrain(desired_rate, -VELOCITY_MAX_Z, VELOCITY_MAX_Z);  // TO-DO: replace constrains with ALTHOLD_MIN_CLIMB_RATE and ALTHOLD_MAX_CLIMB_RATE?
 
@@ -1040,11 +1040,11 @@ get_throttle_rate_stabilized(int16_t target_rate)
 static void
 get_throttle_althold(int32_t target_alt, int16_t max_climb_rate)
 {
-    int32_t altitude_error;
+    int32_t _altitude_error;
     int16_t desired_rate;
 
-    altitude_error = target_alt - current_loc.alt;
-    desired_rate = g.pi_alt_hold.get_p(altitude_error);
+    _altitude_error = target_alt - current_loc.alt;
+    desired_rate = g.pi_alt_hold.get_p(_altitude_error);
     desired_rate = constrain(desired_rate, ALTHOLD_MIN_CLIMB_RATE, max_climb_rate);
 
     // call rate based throttle controller which will update accel based throttle controller targets
@@ -1071,7 +1071,7 @@ get_throttle_land()
 
         // detect whether we have landed by watching for minimum throttle and now movement
 #if INERTIAL_NAV_Z == ENABLED
-        if (abs(inertial_nav._velocity.z) < 20 && (g.rc_3.servo_out <= get_angle_boost(g.throttle_min) || g.pid_throttle_accel.get_integrator() <= -150)) {
+        if (abs(inertial_nav.get_velocity_z()) < 20 && (g.rc_3.servo_out <= get_angle_boost(g.throttle_min) || g.pid_throttle_accel.get_integrator() <= -150)) {
 #else
         if (abs(climb_rate) < 20 && (g.rc_3.servo_out <= get_angle_boost(g.throttle_min) || g.pid_throttle_accel.get_integrator() <= -150)) {
 #endif

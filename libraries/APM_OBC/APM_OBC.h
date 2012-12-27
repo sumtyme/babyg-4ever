@@ -12,6 +12,7 @@
 */
 
 #include <AP_Common.h>
+#include <AP_Param.h>
 #include <inttypes.h>
 
 
@@ -34,6 +35,8 @@ public:
 	// Constructor
 	APM_OBC(void)
 	{
+		AP_Param::setup_object_defaults(this, var_info);
+
 		_last_heartbeat_pin = -1;
 		_last_manual_pin = -1;
 		_state = STATE_PREFLIGHT;

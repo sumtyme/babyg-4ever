@@ -32,6 +32,24 @@
 /// change in your local copy of APM_Config.h.
 ///
 
+#if defined( __AVR_ATmega1280__ )
+ // default choices for a 1280. We can't fit everything in, so we 
+ // make some popular choices by default
+ #define LOGGING_ENABLED DISABLED
+ #ifndef CONFIG_RELAY
+ # define CONFIG_RELAY DISABLED
+ #endif
+ #ifndef MOUNT2
+ # define MOUNT2 DISABLED
+ #endif
+ #ifndef MOUNT
+ # define MOUNT DISABLED
+ #endif
+ #ifndef CAMERA
+ # define CAMERA DISABLED
+ #endif
+#endif
+
 // Just so that it's completely clear...
 #define ENABLED			1
 #define DISABLED		0
@@ -43,30 +61,10 @@
 //////////////////////////////////////////////////////////////////////////////
 
 //////////////////////////////////////////////////////////////////////////////
-// APM HARDWARE
-//
-
-#ifndef CONFIG_APM_HARDWARE
-# define CONFIG_APM_HARDWARE APM_HARDWARE_APM1
-#endif
-
-//////////////////////////////////////////////////////////////////////////////
-// APM2 HARDWARE DEFAULTS
-//
-
-#if CONFIG_APM_HARDWARE == APM_HARDWARE_APM2
-# define CONFIG_INS_TYPE   CONFIG_INS_MPU6000
-# define CONFIG_PUSHBUTTON DISABLED
-# define CONFIG_RELAY      DISABLED
-# define MAG_ORIENTATION   AP_COMPASS_APM2_SHIELD
-# define CONFIG_SONAR_SOURCE SONAR_SOURCE_ANALOG_PIN
-# define MAGNETOMETER ENABLED
-#endif
-
-//////////////////////////////////////////////////////////////////////////////
 // LED and IO Pins
 //
-#if CONFIG_APM_HARDWARE == APM_HARDWARE_APM1
+#if CONFIG_HAL_BOARD == HAL_BOARD_APM1
+# define CONFIG_INS_TYPE   CONFIG_INS_OILPAN
 # define A_LED_PIN        37
 # define B_LED_PIN        36
 # define C_LED_PIN        35
@@ -78,7 +76,13 @@
 # define CONFIG_RELAY     ENABLED
 # define BATTERY_PIN_1	  0
 # define CURRENT_PIN_1	  1
-#elif CONFIG_APM_HARDWARE == APM_HARDWARE_APM2
+#elif CONFIG_HAL_BOARD == HAL_BOARD_APM2
+# define CONFIG_INS_TYPE   CONFIG_INS_MPU6000
+# define CONFIG_PUSHBUTTON DISABLED
+# define CONFIG_RELAY      DISABLED
+# define MAG_ORIENTATION   AP_COMPASS_APM2_SHIELD
+# define CONFIG_SONAR_SOURCE SONAR_SOURCE_ANALOG_PIN
+# define MAGNETOMETER ENABLED
 # define A_LED_PIN        27
 # define B_LED_PIN        26
 # define C_LED_PIN        25
@@ -90,9 +94,25 @@
 # define USB_MUX_PIN 23
 # define BATTERY_PIN_1	  1
 # define CURRENT_PIN_1	  2
+#elif CONFIG_HAL_BOARD == HAL_BOARD_AVR_SITL
+# define CONFIG_INS_TYPE   CONFIG_INS_SITL
+# define CONFIG_PUSHBUTTON DISABLED
+# define CONFIG_RELAY      DISABLED
+# define CONFIG_SONAR_SOURCE SONAR_SOURCE_ANALOG_PIN
+# define A_LED_PIN        27
+# define B_LED_PIN        26
+# define C_LED_PIN        25
+# define LED_ON           LOW
+# define LED_OFF          HIGH
+# define SLIDE_SWITCH_PIN (-1)
+# define PUSHBUTTON_PIN   (-1)
+# define CLI_SLIDER_ENABLED DISABLED
+# define USB_MUX_PIN -1
+# define BATTERY_PIN_1	  1
+# define CURRENT_PIN_1	  2
 #endif
 
-#ifdef DESKTOP_BUILD
+#if CONFIG_HAL_BOARD == HAL_BOARD_AVR_SITL
 #define CONFIG_SONAR DISABLED
 #endif
 
@@ -139,7 +159,7 @@
 # endif
 #elif CONFIG_SONAR_SOURCE == SONAR_SOURCE_ANALOG_PIN
 # ifndef CONFIG_SONAR_SOURCE_ANALOG_PIN
-#  define CONFIG_SONAR_SOURCE_ANALOG_PIN A0
+#  define CONFIG_SONAR_SOURCE_ANALOG_PIN 0
 # endif
 #else
 # warning Invalid value for CONFIG_SONAR_SOURCE, disabling sonar

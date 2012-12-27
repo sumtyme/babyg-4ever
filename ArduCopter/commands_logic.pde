@@ -3,6 +3,7 @@
 /********************************************************************************/
 // Command Event Handlers
 /********************************************************************************/
+// process_nav_command - main switch statement to initiate the next nav command in the command_nav_queue
 static void process_nav_command()
 {
     switch(command_nav_queue.id) {
@@ -136,6 +137,8 @@ static void process_now_command()
 // Verify command Handlers
 /********************************************************************************/
 
+// verify_must - switch statement to ensure the active navigation command is progressing
+// returns true once the active navigation command completes successfully
 static bool verify_must()
 {
     switch(command_nav_queue.id) {
@@ -179,6 +182,8 @@ static bool verify_must()
     }
 }
 
+// verify_may - switch statement to ensure the active conditional command is progressing
+// returns true once the active conditional command completes successfully
 static bool verify_may()
 {
     switch(command_cond_queue.id) {
@@ -242,6 +247,7 @@ static void do_RTL(void)
 //	Nav (Must) commands
 /********************************************************************************/
 
+// do_takeoff - initiate takeoff navigation command
 static void do_takeoff()
 {
     wp_control = LOITER_MODE;
@@ -259,6 +265,7 @@ static void do_takeoff()
     set_next_WP(&temp);
 }
 
+// do_nav_wp - initiate move to next waypoint
 static void do_nav_wp()
 {
     wp_control = WP_MODE;
@@ -277,15 +284,21 @@ static void do_nav_wp()
     if((next_WP.options & WP_OPTION_ALT_REQUIRED) == false) {
         wp_verify_byte |= NAV_ALTITUDE;
     }
+
+    // reset control of yaw
+    if( g.yaw_override_behaviour == YAW_OVERRIDE_BEHAVIOUR_AT_NEXT_WAYPOINT ) {
+        set_yaw_mode(YAW_LOOK_AT_NEXT_WP);
+    }
 }
 
+// do_land - initiate landing procedure
 static void do_land()
 {
-    wp_control = LOITER_MODE;
-    set_throttle_mode(THROTTLE_LAND);
-
     // hold at our current location
     set_next_WP(&current_loc);
+    wp_control = LOITER_MODE;
+
+    set_throttle_mode(THROTTLE_LAND);
 }
 
 static void do_loiter_unlimited()
@@ -302,6 +315,7 @@ static void do_loiter_unlimited()
     }
 }
 
+// do_loiter_turns - initiate moving in a circle
 static void do_loiter_turns()
 {
     wp_control = CIRCLE_MODE;
@@ -327,6 +341,7 @@ static void do_loiter_turns()
     circle_angle *= RADX100;
 }
 
+// do_loiter_time - initiate loitering at a point for a given time period
 static void do_loiter_time()
 {
     if(command_nav_queue.lat == 0) {
@@ -345,6 +360,7 @@ static void do_loiter_time()
 //	Verify Nav (Must) commands
 /********************************************************************************/
 
+// verify_takeoff - check if we have completed the takeoff
 static bool verify_takeoff()
 {
     // wait until we are ready!
@@ -362,6 +378,7 @@ static bool verify_land()
     return ap.land_complete;
 }
 
+// verify_nav_wp - check if we have reached the next way point
 static bool verify_nav_wp()
 {
     // Altitude checking
@@ -421,6 +438,7 @@ static bool verify_loiter_unlimited()
     return false;
 }
 
+// verify_loiter_time - check if we have loitered long enough
 static bool verify_loiter_time()
 {
     if(wp_control == LOITER_MODE) {
@@ -437,6 +455,7 @@ static bool verify_loiter_time()
     return false;
 }
 
+// verify_loiter_turns - check if we have circled the point enough
 static bool verify_loiter_turns()
 {
     //cliSerial->printf("loiter_sum: %d \n", loiter_sum);
@@ -674,28 +693,6 @@ static void do_change_speed()
     g.waypoint_speed_max = command_cond_queue.p1 * 100;
 }
 
-// do_target_yaw - initialise yaw mode based on requested yaw target
-static void do_target_yaw()
-{
-    switch( command_cond_queue.p1 ) {
-        case MAV_ROI_NONE:
-            set_yaw_mode(YAW_HOLD);
-            break;
-        case MAV_ROI_WPNEXT:
-            set_yaw_mode(YAW_LOOK_AT_NEXT_WP);
-            break;
-        case MAV_ROI_LOCATION:
-            yaw_look_at_WP = command_cond_queue;
-            set_yaw_mode(YAW_LOOK_AT_LOCATION);
-            break;
-    }
-}
-
-static void do_loiter_at_location()
-{
-    next_WP = current_loc;
-}
-
 static void do_jump()
 {
     // Used to track the state of the jump command in Mission scripting
@@ -785,8 +782,8 @@ static void do_set_servo()
 
     // send output to channel
     if (channel_num != 0xff) {
-        APM_RC.enable_out(channel_num);
-        APM_RC.OutputCh(channel_num, command_cond_queue.alt);
+        hal.rcout->enable_ch(channel_num);
+        hal.rcout->write(channel_num, command_cond_queue.alt);
     }
 }
 

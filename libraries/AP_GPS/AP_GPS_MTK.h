@@ -12,16 +12,15 @@
 //
 // Note - see AP_GPS_MTK16.h for firmware 1.6 and later.
 //
-#ifndef AP_GPS_MTK_h
-#define AP_GPS_MTK_h
+#ifndef __AP_GPS_MTK_H__
+#define __AP_GPS_MTK_H__
 
 #include "GPS.h"
 #include "AP_GPS_MTK_Common.h"
 
 class AP_GPS_MTK : public GPS {
 public:
-    AP_GPS_MTK(Stream *s);
-    virtual void        init(enum GPS_Engine_Setting nav_setting = GPS_ENGINE_NONE);
+    virtual void        init(AP_HAL::UARTDriver *s, enum GPS_Engine_Setting nav_setting = GPS_ENGINE_NONE);
     virtual bool        read(void);
     static bool _detect(uint8_t );
 
@@ -71,4 +70,4 @@ private:
     void        _parse_gps();
 };
 
-#endif  // AP_GPS_MTK_H
+#endif  // __AP_GPS_MTK_H__

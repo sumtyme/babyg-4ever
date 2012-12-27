@@ -11,21 +11,13 @@
 //	GPS configuration : Custom protocol per "DIYDrones Custom Binary Sentence Specification V1.1"
 //
 
+#include <AP_HAL.h>
 #include "AP_GPS_HIL.h"
-#if defined(ARDUINO) && ARDUINO >= 100
- #include "Arduino.h"
-#else
- #include "WProgram.h"
-#endif
-
-// Constructors ////////////////////////////////////////////////////////////////
-AP_GPS_HIL::AP_GPS_HIL(Stream *s) : GPS(s)
-{
-}
 
 // Public Methods //////////////////////////////////////////////////////////////
-void AP_GPS_HIL::init(enum GPS_Engine_Setting nav_setting)
+void AP_GPS_HIL::init(AP_HAL::UARTDriver *s, enum GPS_Engine_Setting nav_setting)
 {
+	_port = s;
     idleTimeout = 1200;
 }
 

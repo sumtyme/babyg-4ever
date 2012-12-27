@@ -6,6 +6,7 @@
 // Assorted useful math operations for ArduPilot(Mega)
 
 #include <AP_Common.h>
+#include <AP_Param.h>
 #include <math.h>
 #include <stdint.h>
 #include "rotations.h"
@@ -14,6 +15,12 @@
 #include "matrix3.h"
 #include "quaternion.h"
 #include "polygon.h"
+
+#ifndef PI
+#define PI 3.141592653589793
+#endif
+#define DEG_TO_RAD 0.017453292519943295769236907684886
+#define RAD_TO_DEG 57.295779513082320876798154814105
 
 // define AP_Param types AP_Vector3f and Ap_Matrix3f
 AP_PARAMDEFV(Matrix3f, Matrix3f, AP_PARAM_MATRIX3F);
@@ -53,6 +60,33 @@ void        location_update(struct Location *loc, float bearing, float distance)
 
 // extrapolate latitude/longitude given distances north and east
 void        location_offset(struct Location *loc, float ofs_north, float ofs_east);
+
+// constrain a value
+float   constrain(float amt, float low, float high);
+int16_t constrain_int16(int16_t amt, int16_t low, int16_t high);
+int32_t constrain_int32(int32_t amt, int32_t low, int32_t high);
+
+// degrees -> radians
+float radians(float deg);
+
+// radians -> degrees
+float degrees(float rad);
+
+// square
+float sq(float v);
+
+// sqrt of sum of squares
+float pythagorous2(float a, float b);
+float pythagorous3(float a, float b, float c);
+
+#ifdef radians
+#error "Build is including Arduino base headers"
+#endif
+
+/* The following three functions used to be arduino core macros */
+#define max(a,b) ((a)>(b)?(a):(b))
+#define min(a,b) ((a)<(b)?(a):(b))
+
 
 #endif // AP_MATH_H
 

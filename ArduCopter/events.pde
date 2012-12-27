@@ -21,21 +21,17 @@ static void failsafe_on_event()
             }else if(ap.home_is_set == true) {
                 set_mode(RTL);
             }else{
-                // We have no GPS so we will crash land in alt hold mode
-                // the low throttle will bring us down at the maximum
-                // the low throttle will bring us down at the maximum descent speed
-                // To-Do: make LAND a throttle mode so it can operate without GPS
-                set_mode(ALT_HOLD);
-                set_new_altitude(0);
+                // We have no GPS so we will land
+                set_mode(LAND);
             }
             break;
         case AUTO:
-            // throttle_fs_action is 1 do RTL, everything else means continue with the mission
-            if (g.throttle_fs_action == THROTTLE_FAILSAFE_ACTION_ALWAYS_RTL) {
+            // failsafe_throttle is 1 do RTL, 2 means continue with the mission
+            if (g.failsafe_throttle == FS_THR_ENABLED_ALWAYS_RTL) {
                 // To-Do: check distance from home before initiating RTL
                 set_mode(RTL);
             }
-            // if throttle_fs_action is 2 (i.e. THROTTLE_FAILSAFE_ACTION_CONTINUE_MISSION) no need to do anything
+            // if failsafe_throttle is 2 (i.e. FS_THR_ENABLED_CONTINUE_MISSION) no need to do anything
             break;
         default:
             if(ap.home_is_set == true) {
@@ -69,7 +65,7 @@ static void low_battery_event(void)
     gcs_send_text_P(SEVERITY_LOW,PSTR("Low Battery!"));
 
     // failsafe check
-    if (g.battery_fs_enabled && !ap.low_battery && motors.armed()) {
+    if (g.failsafe_battery_enabled && !ap.low_battery && motors.armed()) {
         switch(control_mode) {
             case STABILIZE:
             case ACRO:
@@ -115,9 +111,9 @@ static void update_events()     // Used for MAV_CMD_DO_REPEAT_SERVO and MAV_CMD_
 
         if (event_id >= CH_5 && event_id <= CH_8) {
             if(event_repeat%2) {
-                APM_RC.OutputCh(event_id, event_value);                 // send to Servos
+                hal.rcout->write(event_id, event_value);                 // send to Servos
             } else {
-                APM_RC.OutputCh(event_id, event_undo_value);
+                hal.rcout->write(event_id, event_undo_value);
             }
         }
 

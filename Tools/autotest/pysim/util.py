@@ -69,6 +69,7 @@ def build_AVR(atype, board='mega2560'):
     '''build AVR binaries'''
     config = open(reltopdir('config.mk'), mode='w')
     config.write('''
+HAL_BOARD=HAL_BOARD_APM1
 BOARD=%s
 PORT=/dev/null
 ''' % board)
@@ -114,7 +115,7 @@ def pexpect_drain(p):
     except pexpect.TIMEOUT:
         pass
 
-def start_SIL(atype, valgrind=False, wipe=False, CLI=False, height=None):
+def start_SIL(atype, valgrind=False, wipe=False, height=None):
     '''launch a SIL instance'''
     cmd=""
     if valgrind and os.path.exists('/usr/bin/valgrind'):
@@ -122,8 +123,6 @@ def start_SIL(atype, valgrind=False, wipe=False, CLI=False, height=None):
     cmd += reltopdir('tmp/%s.build/%s.elf' % (atype, atype))
     if wipe:
         cmd += ' -w'
-    if CLI:
-        cmd += ' -s'
     if height is not None:
         cmd += ' -H %u' % height
     ret = pexpect.spawn(cmd, logfile=sys.stdout, timeout=5)
